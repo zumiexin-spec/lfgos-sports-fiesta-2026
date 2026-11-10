@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Environment Variables
+.env
+.env.*
+!.env.example
+
+# Local logs and test outputs
+*.log
+test-results/
+.system_generated/
+scratch/
+
+# OS metadata
+Thumbs.db
+.DS_Store

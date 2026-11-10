@@ -1,0 +1,29 @@
+{
+  "src": "./assets/sounds/fiesta_audio_sprite.wav",
+  "sprite": {
+    "tap": [
+      0,
+      40
+    ],
+    "result_declared": [
+      80,
+      370
+    ],
+    "win_chime": [
+      500,
+      750
+    ],
+    "live_started": [
+      1300,
+      400
+    ],
+    "alert": [
+      1750,
+      300
+    ],
+    "error": [
+      2100,
+      300
+    ]
+  }
+}

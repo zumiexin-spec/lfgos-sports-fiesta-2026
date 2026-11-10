@@ -1,0 +1,230 @@
+{
+  "generated_at": "2026-11-10T03:44:27.448Z",
+  "tool": "tools/process_logos.mjs (Sharp 0.35.5 / libvips)",
+  "items": {
+    "fiesta_logo": {
+      "name": "fiesta_logo",
+      "is_circular": true,
+      "aspect_ratio": "1.022",
+      "original_size": {
+        "width": 1333,
+        "height": 1304
+      },
+      "exports": {
+        "1x": {
+          "width": 200,
+          "png_bytes": 55550,
+          "png_path": "./assets/logos/fiesta_logo_1x.png",
+          "webp_bytes": 18674,
+          "webp_path": "./assets/logos/fiesta_logo_1x.webp"
+        },
+        "2x": {
+          "width": 400,
+          "png_bytes": 180241,
+          "png_path": "./assets/logos/fiesta_logo_2x.png",
+          "webp_bytes": 47070,
+          "webp_path": "./assets/logos/fiesta_logo_2x.webp"
+        },
+        "3x": {
+          "width": 600,
+          "png_bytes": 376316,
+          "png_path": "./assets/logos/fiesta_logo_3x.png",
+          "webp_bytes": 77298,
+          "webp_path": "./assets/logos/fiesta_logo_3x.webp"
+        }
+      }
+    },
+    "sikatiya": {
+      "name": "sikatiya",
+      "is_circular": false,
+      "aspect_ratio": "1.027",
+      "original_size": {
+        "width": 1354,
+        "height": 1319
+      },
+      "exports": {
+        "1x": {
+          "width": 160,
+          "png_bytes": 50108,
+          "png_path": "./assets/logos/sikatiya_1x.png",
+          "webp_bytes": 15576,
+          "webp_path": "./assets/logos/sikatiya_1x.webp"
+        },
+        "2x": {
+          "width": 320,
+          "png_bytes": 175311,
+          "png_path": "./assets/logos/sikatiya_2x.png",
+          "webp_bytes": 42278,
+          "webp_path": "./assets/logos/sikatiya_2x.webp"
+        },
+        "3x": {
+          "width": 480,
+          "png_bytes": 364518,
+          "png_path": "./assets/logos/sikatiya_3x.png",
+          "webp_bytes": 74700,
+          "webp_path": "./assets/logos/sikatiya_3x.webp"
+        }
+      }
+    },
+    "ghoshi": {
+      "name": "ghoshi",
+      "is_circular": false,
+      "aspect_ratio": "1.035",
+      "original_size": {
+        "width": 1354,
+        "height": 1308
+      },
+      "exports": {
+        "1x": {
+          "width": 160,
+          "png_bytes": 50935,
+          "png_path": "./assets/logos/ghoshi_1x.png",
+          "webp_bytes": 15350,
+          "webp_path": "./assets/logos/ghoshi_1x.webp"
+        },
+        "2x": {
+          "width": 320,
+          "png_bytes": 178288,
+          "png_path": "./assets/logos/ghoshi_2x.png",
+          "webp_bytes": 41856,
+          "webp_path": "./assets/logos/ghoshi_2x.webp"
+        },
+        "3x": {
+          "width": 480,
+          "png_bytes": 371105,
+          "png_path": "./assets/logos/ghoshi_3x.png",
+          "webp_bytes": 74962,
+          "webp_path": "./assets/logos/ghoshi_3x.webp"
+        }
+      }
+    },
+    "international": {
+      "name": "international",
+      "is_circular": false,
+      "aspect_ratio": "1.018",
+      "original_size": {
+        "width": 1354,
+        "height": 1330
+      },
+      "exports": {
+        "1x": {
+          "width": 160,
+          "png_bytes": 52805,
+          "png_path": "./assets/logos/international_1x.png",
+          "webp_bytes": 15570,
+          "webp_path": "./assets/logos/international_1x.webp"
+        },
+        "2x": {
+          "width": 320,
+          "png_bytes": 186112,
+          "png_path": "./assets/logos/international_2x.png",
+          "webp_bytes": 40890,
+          "webp_path": "./assets/logos/international_2x.webp"
+        },
+        "3x": {
+          "width": 480,
+          "png_bytes": 388881,
+          "png_path": "./assets/logos/international_3x.png",
+          "webp_bytes": 72818,
+          "webp_path": "./assets/logos/international_3x.webp"
+        }
+      }
+    },
+    "nizamuddinpura": {
+      "name": "nizamuddinpura",
+      "is_circular": false,
+      "aspect_ratio": "1.037",
+      "original_size": {
+        "width": 1351,
+        "height": 1303
+      },
+      "exports": {
+        "1x": {
+          "width": 160,
+          "png_bytes": 51161,
+          "png_path": "./assets/logos/nizamuddinpura_1x.png",
+          "webp_bytes": 15484,
+          "webp_path": "./assets/logos/nizamuddinpura_1x.webp"
+        },
+        "2x": {
+          "width": 320,
+          "png_bytes": 181776,
+          "png_path": "./assets/logos/nizamuddinpura_2x.png",
+          "webp_bytes": 43170,
+          "webp_path": "./assets/logos/nizamuddinpura_2x.webp"
+        },
+        "3x": {
+          "width": 480,
+          "png_bytes": 383350,
+          "png_path": "./assets/logos/nizamuddinpura_3x.png",
+          "webp_bytes": 78814,
+          "webp_path": "./assets/logos/nizamuddinpura_3x.webp"
+        }
+      }
+    },
+    "kiriharpur": {
+      "name": "kiriharpur",
+      "is_circular": false,
+      "aspect_ratio": "1.023",
+      "original_size": {
+        "width": 1354,
+        "height": 1323
+      },
+      "exports": {
+        "1x": {
+          "width": 160,
+          "png_bytes": 53388,
+          "png_path": "./assets/logos/kiriharpur_1x.png",
+          "webp_bytes": 16938,
+          "webp_path": "./assets/logos/kiriharpur_1x.webp"
+        },
+        "2x": {
+          "width": 320,
+          "png_bytes": 189275,
+          "png_path": "./assets/logos/kiriharpur_2x.png",
+          "webp_bytes": 45220,
+          "webp_path": "./assets/logos/kiriharpur_2x.webp"
+        },
+        "3x": {
+          "width": 480,
+          "png_bytes": 395174,
+          "png_path": "./assets/logos/kiriharpur_3x.png",
+          "webp_bytes": 81764,
+          "webp_path": "./assets/logos/kiriharpur_3x.webp"
+        }
+      }
+    },
+    "kasimabad": {
+      "name": "kasimabad",
+      "is_circular": false,
+      "aspect_ratio": "1.024",
+      "original_size": {
+        "width": 1354,
+        "height": 1322
+      },
+      "exports": {
+        "1x": {
+          "width": 160,
+          "png_bytes": 52063,
+          "png_path": "./assets/logos/kasimabad_1x.png",
+          "webp_bytes": 15556,
+          "webp_path": "./assets/logos/kasimabad_1x.webp"
+        },
+        "2x": {
+          "width": 320,
+          "png_bytes": 183601,
+          "png_path": "./assets/logos/kasimabad_2x.png",
+          "webp_bytes": 42930,
+          "webp_path": "./assets/logos/kasimabad_2x.webp"
+        },
+        "3x": {
+          "width": 480,
+          "png_bytes": 383364,
+          "png_path": "./assets/logos/kasimabad_3x.png",
+          "webp_bytes": 76934,
+          "webp_path": "./assets/logos/kasimabad_3x.webp"
+        }
+      }
+    }
+  }
+}

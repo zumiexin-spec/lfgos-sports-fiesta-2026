@@ -1,0 +1,16 @@
+.env
+.env.*
+server.js
+server.js.bak
+app.js.bak
+scratch/
+tests/
+test-results/
+tools/
+exports/
+*.dc.html
+*.log
+doctor.js
+support.js
+process_logos.ps1
+.git
