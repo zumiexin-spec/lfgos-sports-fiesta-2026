@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "private": true,
   "description": "Official public read-only PWA and feed server for LFGOS Sports Fiesta 2026",
-  "main": "public/index.html",
   "engines": {
     "node": ">=18.0.0"
   },

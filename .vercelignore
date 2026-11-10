@@ -2,7 +2,10 @@
 .env.*
 server.js
 server.js.bak
+app.js
 app.js.bak
+fiesta.css
+index.html
 scratch/
 tests/
 test-results/
