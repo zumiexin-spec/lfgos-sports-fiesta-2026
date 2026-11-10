@@ -36,8 +36,6 @@
     }
   ],
   "rewrites": [
-    { "source": "/api/public_feed", "destination": "/api/public_feed.js" },
-    { "source": "/api/health", "destination": "/api/health.js" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/((?!api/|assets/|vendor/|.*\\..*).*)", "destination": "/index.html" }
   ]
 }
