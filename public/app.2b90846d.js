@@ -856,15 +856,13 @@
   }
 
   function navigate(route, params = {}) {
-    const qs = Object.keys(params).map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`).join('&');
-    const targetHash = '#' + route + (qs ? '?' + qs : '');
-    if (location.hash === targetHash) {
-      State.currentRoute = route;
-      State.routeParams = params;
-      transitionView(() => renderApp());
-    } else {
-      location.hash = targetHash;
+    State.currentRoute = route;
+    State.routeParams = params;
+    // Single URL mode: Keep browser URL clean at / without hash slugging
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState({ route, params }, '', window.location.pathname || '/');
     }
+    transitionView(() => renderApp());
   }
 
   // --- THEME MANAGEMENT ---
@@ -1238,7 +1236,7 @@
                 <span class="lab" style="color: var(--glacier); font-weight: 700;">13 & 14 Nov 2026</span>
               </div>
               <div class="dsp h-title" style="margin: 0; font-size: 26px;">PLAY • COMPETE • ACHIEVE</div>
-              <div class="lab" style="color: var(--glacier); font-weight: 600;">Dr. Bhimrao Ambedkar Sports Stadium, Mau</div>
+              <div class="lab" style="color: var(--glacier); font-weight: 600;">Sports Fiesta 2026</div>
 
               <div class="row" style="gap: 10px; margin-top: 6px;">
                 <a href="#scores?mode=points" class="btn on-hero" style="min-height: 40px; padding: 0 16px; font-size: 14px;">School Standings</a>
@@ -1571,7 +1569,7 @@
                   <i></i> ${isNov13 ? '13 NOV • CRICKET DAY 1' : 'STARTS 14 NOV 2026'}
                 </div>
                 <div class="dsp" style="font-size: 22px; margin: 0; color: #FFFFFF;">Live Stream Starts on 14 Nov 2026</div>
-                <div class="lab" style="color: #FFFFFF; font-size: 13px; margin-top: 4px; opacity: 0.95;">09:00 AM IST • Dr. Bhimrao Ambedkar Sports Stadium</div>
+                <div class="lab" style="color: #FFFFFF; font-size: 13px; margin-top: 4px; opacity: 0.95;">09:00 AM IST • Sports Fiesta Live Stream</div>
                 ${stream.fallback_url ? `
                   <a href="${stream.fallback_url}" target="_blank" rel="noopener noreferrer" class="link-accent lab" style="margin-top: 10px; color: #FFE082; font-weight: 700;">
                     Watch on YouTube &nearr;
@@ -3569,7 +3567,7 @@
           </div>
         </div>
         <div class="dsp" style="font-size: 20px; font-weight: 800; color: var(--tx); margin-top: 8px;">Connecting to Live Feed...</div>
-        <div class="lab mut" style="font-size: 13px; text-align: center; max-width: 280px;">Dr. Bhimrao Ambedkar Sports Stadium, Mau</div>
+        <div class="lab mut" style="font-size: 13px; text-align: center; max-width: 280px;">Sports Fiesta 2026</div>
       </div>
     `;
   }
@@ -3723,14 +3721,51 @@
       }
     });
 
+    // Single URL mode: parse initial route from hash if present (e.g. #fixtures) then clean URL
+    if (location.hash) {
+      const { route: initialRoute, params: initialParams } = parseHashRoute();
+      State.currentRoute = initialRoute;
+      State.routeParams = initialParams;
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState({ route: initialRoute, params: initialParams }, '', window.location.pathname || '/');
+      }
+    }
+
     renderApp();
     fetchPublicFeed();
 
+    // Global link interceptor: Prevent #hash slugging in browser address bar (single URL only)
+    document.addEventListener('click', (e) => {
+      const anchor = e.target.closest('a[href^="#"]');
+      if (anchor) {
+        const href = anchor.getAttribute('href');
+        if (href && href.startsWith('#')) {
+          e.preventDefault();
+          const raw = href.slice(1);
+          const [pathPart, queryPart] = raw.split('?');
+          const params = {};
+          if (queryPart) {
+            queryPart.split('&').forEach(pair => {
+              const [k, v] = pair.split('=');
+              if (k) params[decodeURIComponent(k)] = decodeURIComponent(v || '');
+            });
+          }
+          navigate(pathPart || 'home', params);
+        }
+      }
+    });
+
     window.addEventListener('hashchange', () => {
       const { route: newRoute, params: newParams } = parseHashRoute();
-      State.currentRoute = newRoute;
-      State.routeParams = newParams;
-      transitionView(() => renderApp());
+      navigate(newRoute, newParams);
+    });
+
+    window.addEventListener('popstate', (e) => {
+      if (e.state && e.state.route) {
+        State.currentRoute = e.state.route;
+        State.routeParams = e.state.params || {};
+        transitionView(() => renderApp());
+      }
     });
   }
 

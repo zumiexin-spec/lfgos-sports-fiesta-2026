@@ -120,7 +120,7 @@ async function fetchFromBase44() {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 4500);
-      const res = await fetch(`${baseUrl}/entities/${entityName}/records`, {
+      const res = await fetch(`${baseUrl}/entities/${entityName}`, {
         headers,
         signal: controller.signal
       });
@@ -161,7 +161,17 @@ async function fetchFromBase44() {
     }
 
     const displayState = displaysRaw && displaysRaw.length > 0 ? displaysRaw[displaysRaw.length - 1] : {};
-    const schools = calculateStandings(schoolsRaw, pointsLedgerRaw, resultsRaw, fixturesRaw);
+
+    // Filter confirmed/scheduled fixtures with confirmed schools or scheduled time/date
+    const validFixtures = (fixturesRaw || []).filter(f => {
+      if (!f) return false;
+      const hasTime = !!(f.scheduled_time || f.date || f.day || f.time);
+      const hasSchools = !!(f.school_a_id || f.school_b_id || f.team_a || f.team_b);
+      const isConfirmed = f.status && f.status !== 'Awaiting opponent' && f.status !== 'unscheduled';
+      return (hasTime || hasSchools) && isConfirmed;
+    });
+
+    const schools = calculateStandings(schoolsRaw, pointsLedgerRaw, resultsRaw, validFixtures);
 
     return {
       version: Date.now(),
@@ -175,7 +185,7 @@ async function fetchFromBase44() {
       events: eventsRaw || [],
       competitions: compsRaw || [],
       results: (resultsRaw || []).filter(r => r.status === 'Approved' || r.status === 'Completed'),
-      fixtures: fixturesRaw || [],
+      fixtures: validFixtures,
       announcements: announcementsRaw || [],
       media: (mediaRaw || []).filter(m => m.approved !== false && m.consent_approved !== false),
       display_state: displayState
