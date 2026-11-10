@@ -2,17 +2,11 @@
 .env.*
 server.js
 server.js.bak
-app.js
 app.js.bak
-fiesta.css
-index.html
 scratch/
 tests/
 test-results/
 exports/
-tools/generate_pwa_splash.mjs
-tools/export_stream_logo.mjs
-tools/assemble_vercel_folder.mjs
 *.dc.html
 *.log
 doctor.js
