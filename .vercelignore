@@ -6,8 +6,10 @@ app.js.bak
 scratch/
 tests/
 test-results/
-tools/
 exports/
+tools/generate_pwa_splash.mjs
+tools/export_stream_logo.mjs
+tools/assemble_vercel_folder.mjs
 *.dc.html
 *.log
 doctor.js

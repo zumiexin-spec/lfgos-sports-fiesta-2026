@@ -8,7 +8,7 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "build": "node tools/build.mjs",
+    "build": "node -e \"const fs = require('fs'); if (fs.existsSync('tools/build.mjs')) { require('child_process').execSync('node tools/build.mjs', { stdio: 'inherit' }); } else { console.log('tools/build.mjs not found, serving pre-built public directory'); }\"",
     "dev": "node server.js",
     "start": "node server.js",
     "test": "node tests/mock_upstream.test.mjs && node tests/unit.test.mjs",
