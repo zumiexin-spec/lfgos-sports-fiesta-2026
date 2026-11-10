@@ -89,6 +89,15 @@ for (const target of copyTargets) {
   }
 }
 
+// Copy root-level icons from assets if not already at root
+['icon-192.png', 'icon-512.png', 'icon-maskable.png', 'og-image.png'].forEach(f => {
+  const assetSrc = path.join(ROOT_DIR, 'assets', f);
+  const rootDest = path.join(PUBLIC_DIR, f);
+  if (fs.existsSync(assetSrc) && !fs.existsSync(rootDest)) {
+    fs.copyFileSync(assetSrc, rootDest);
+  }
+});
+
 // 6. Generate Service Worker (public/sw.js) with content-hash cache version
 const buildHash = hashContent(cssHash + jsHash + Date.now().toString());
 const swTemplate = `/* LFGOS Sports Fiesta 2026 - Production Service Worker (${buildHash}) */
