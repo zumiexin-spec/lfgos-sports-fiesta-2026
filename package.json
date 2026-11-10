@@ -1,0 +1,25 @@
+{
+  "name": "lfgos-sports-fiesta-2026",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Official public read-only PWA and feed server for LFGOS Sports Fiesta 2026",
+  "main": "public/index.html",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "node -e \"const fs = require('fs'); if (fs.existsSync('tools/build.mjs')) { require('child_process').execSync('node tools/build.mjs', { stdio: 'inherit' }); } else { console.log('tools/build.mjs not found, serving pre-built public directory'); }\"",
+    "dev": "node server.js",
+    "start": "node server.js",
+    "test": "node tests/mock_upstream.test.mjs && node tests/unit.test.mjs",
+    "test:ui": "node tests/ui.test.mjs"
+  },
+  "dependencies": {
+    "@base44/sdk": "^0.8.59",
+    "dotenv": "^18.0.10"
+  },
+  "devDependencies": {
+    "axe-core": "^4.14.0",
+    "playwright": "^1.65.0"
+  }
+}

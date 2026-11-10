@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /api/health
+Disallow: /scratch/
+Disallow: /tools/
+Disallow: /tests/

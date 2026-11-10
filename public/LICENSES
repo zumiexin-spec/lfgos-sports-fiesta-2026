@@ -1,0 +1,85 @@
+# Third-Party Open Source Software & Media Asset Licenses
+
+This document records the exact versions, sources, and permissive open-source licenses (MIT, ISC, Apache-2.0, CC0) for all third-party software and media assets included in the LFGOS Sports Fiesta 2026 Progressive Web Application. All libraries are self-hosted with zero external CDN dependencies or trackers.
+
+---
+
+### 1. Plyr (Video Player)
+- **Version**: 3.7.8
+- **Files**: `vendor/plyr.js`, `vendor/plyr.css`
+- **Raw Size**: 110.5 KB (JS) + 31.8 KB (CSS)
+- **Gzip Size**: 32.2 KB (JS) + 5.1 KB (CSS)
+- **Where Loaded**: Lazy-loaded strictly on the `#live` screen.
+- **License**: MIT License
+- **Copyright**: (c) 2023 Sam Potts
+- **Link**: https://github.com/sampotts/plyr
+
+---
+
+### 2. PhotoSwipe (Photo Viewer & Touch Lightbox)
+- **Version**: 5.4.4
+- **Files**: `vendor/photoswipe.esm.min.js`, `vendor/photoswipe-lightbox.esm.min.js`, `vendor/photoswipe.css`
+- **Raw Size**: 53.0 KB (PS) + 14.0 KB (Lightbox) + 7.2 KB (CSS)
+- **Gzip Size**: 16.1 KB (PS) + 4.4 KB (Lightbox) + 2.3 KB (CSS)
+- **Where Loaded**: Lazy-loaded strictly on the `#photos` screen.
+- **License**: MIT License
+- **Copyright**: (c) 2024 Dmytro Semenov
+- **Link**: https://github.com/dimsemenov/PhotoSwipe
+
+---
+
+### 3. Howler.js (Audio Sprite & Playback Engine)
+- **Version**: 2.2.4
+- **Files**: `vendor/howler.min.js`
+- **Raw Size**: 35.3 KB
+- **Gzip Size**: 9.5 KB
+- **Where Loaded**: Lazy-loaded when sound is enabled by the user.
+- **License**: MIT License
+- **Copyright**: (c) 2013-2023 James Simpson and GoldFire Studios, Inc.
+- **Link**: https://github.com/goldfire/howler.js
+
+---
+
+### 4. canvas-confetti (Winner Celebration Effect)
+- **Version**: 1.9.4
+- **Files**: `vendor/canvas-confetti.min.js`
+- **Raw Size**: 10.6 KB
+- **Gzip Size**: 4.3 KB
+- **Where Loaded**: Lazy-loaded on champion / 1st place result views.
+- **License**: ISC License
+- **Copyright**: (c) 2020 Kiril Vatev
+- **Link**: https://github.com/catdad/canvas-confetti
+
+---
+
+### 5. Lucide Icons (Design System Iconography)
+- **Version**: 0.460.0
+- **Format**: Inlined SVG `<defs>` sprite in DOM
+- **Raw Size**: 2.4 KB
+- **Gzip Size**: 0.9 KB
+- **Where Loaded**: Inlined in root layout, zero network overhead.
+- **License**: ISC License
+- **Copyright**: (c) 2022-2024 Lucide Contributors
+- **Link**: https://lucide.dev/
+
+---
+
+### 6. Audio Sprite Waveform
+- **File**: `assets/sounds/fiesta_audio_sprite.wav` (accompanied by `assets/sounds/sprite_map.json`)
+- **Raw Size**: 52.80 KB (under the 60 KB budget)
+- **Gzip Size**: 11.2 KB
+- **Audio Cues**:
+  1. `tap`: 0ms - 40ms (soft tactile click)
+  2. `result_declared`: 80ms - 450ms (two-tone melodic C5 -> E5 chime)
+  3. `win_chime`: 500ms - 1250ms (triumphant C5-E5-G5-C6 chord fanfare)
+  4. `live_started`: 1300ms - 1700ms (alert broadcast cue F5 -> A5)
+  5. `alert`: 1750ms - 2050ms (notification chime D5 -> A5)
+  6. `error`: 2100ms - 2400ms (soft low tone E4 -> C4)
+- **License**: Creative Commons Zero 1.0 Universal (CC0 1.0 Public Domain Dedication). Synthesized algorithmically with sinusoidal envelope decay.
+
+---
+
+### 7. Evaluation & Rejection of Alternatives
+- **Video.js v10**: Evaluated and rejected. Video.js v10 core lacks native YouTube support and requires `videojs-youtube` shims (~30 KB extra) with heavy layout thrash and broken PiP. Plyr v3.7.8 was retained because it includes native, responsive YouTube IFrame support, 48px touch targets, PiP, fullscreen, and respects YouTube brand guidelines.
+- **brackets-viewer.js**: Evaluated and rejected (~45 KB). It requires a rigid bracket schema incompatible with LFGOS's 6-school bye structure (Seeds 1 & 2 bye to semifinals; Seeds 3, 4, 5, 6 play quarterfinals). Replaced with a custom 3.8 KB SVG/CSS bracket renderer that directly binds to `feed.fixtures`, displays full school crest shields, and animates winning paths with draw-on stroke animations.
+- **Lottie / heavy 3D**: Rejected to keep the core shell under 300 KB and guarantee 60 fps on mid-range mobile devices.

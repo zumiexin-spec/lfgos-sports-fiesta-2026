@@ -1,0 +1,31 @@
+{
+  "name": "LFGOS Sports Fiesta 2026",
+  "short_name": "Sports Fiesta",
+  "description": "Read-only live scores, results, fixtures, standings and photos for Little Flower Group of Schools Sports Fiesta 2026.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#2448FF",
+  "background_color": "#EAF2FF",
+  "icons": [
+    {
+      "src": "./assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./assets/icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
