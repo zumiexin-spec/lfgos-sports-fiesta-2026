@@ -1429,7 +1429,7 @@
                 ${renderSchoolCrest(winSchool, 'c40')}
                 <div class="fl" style="min-width: 0;">
                   <div style="font-weight: 800; font-size: 16px; color: #FFFFFF;">${winSchool.short_name}</div>
-                  <div class="lab" style="color: var(--gold); font-size: 12px;">Winner · +${p1?.points || 20} pts ${p1?.athlete_name ? `· ${escapeHtml(p1.athlete_name)}` : ''}</div>
+                  <div class="lab" style="color: var(--gold); font-size: 12px;">Winner · +${p1Points} pts${p1Athlete ? ` · ${escapeHtml(p1Athlete)}` : ''}</div>
                 </div>
               </div>
 
