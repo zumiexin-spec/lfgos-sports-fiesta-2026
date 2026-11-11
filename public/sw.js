@@ -1,12 +1,12 @@
-/* LFGOS Sports Fiesta 2026 - Production Service Worker (babb5adc) */
-const CACHE_NAME = 'fiesta-cache-babb5adc';
-const DATA_CACHE_NAME = 'fiesta-data-babb5adc';
+/* LFGOS Sports Fiesta 2026 - Production Service Worker (458e819b) */
+const CACHE_NAME = 'fiesta-cache-458e819b';
+const DATA_CACHE_NAME = 'fiesta-data-458e819b';
 
 const APP_SHELL = [
   './',
   './index.html',
-  './app.eed7661f.js',
-  './fiesta.63d76351.css',
+  './app.6e173194.js',
+  './fiesta.cf48f16a.css',
   './manifest.json',
   './fiesta.png',
   './assets/logo.png',

@@ -1924,114 +1924,36 @@
     document.body.appendChild(script);
   }
 
-  // --- SCREEN 4: PHOTOS (DYNAMIC ALBUMS & PHOTOSWIPE V5) ---
-  function deriveAlbums(media, feed) {
-    if (!media || media.length === 0) return [];
+  // --- SCREEN 4: PHOTOS (ALL PHOTOS DIRECT GALLERY & PHOTOSWIPE V5) ---
+  function isNotLogo(u) {
+    if (!u) return false;
+    const s = u.toLowerCase();
+    return !s.includes('logo') && !s.includes('fiesta.png') && !s.includes('og-image') && !s.includes('crest') &&
+           !s.includes('sikatiya') && !s.includes('ghoshi') && !s.includes('international') && !s.includes('nizamuddinpura') &&
+           !s.includes('kirihar') && !s.includes('kasimabad');
+  }
 
-    const isLogo = (u) => {
-      if (!u) return true;
-      const s = u.toLowerCase();
-      return s.includes('logo') || s.includes('fiesta.png') || s.includes('og-image') || s.includes('crest') ||
-             s.includes('sikatiya') || s.includes('ghoshi') || s.includes('international') || s.includes('nizamuddinpura') ||
-             s.includes('kirihar') || s.includes('kasimabad');
-    };
-
-    const validPhotos = media
+  function getValidPhotos(media) {
+    if (!media || !Array.isArray(media)) return [];
+    return media
       .filter(m => m.consent_approved !== false && m.active !== false)
       .filter(m => {
         const u = m.file_url || m.url;
-        return u && !isLogo(u);
+        return u && isNotLogo(u);
       });
+  }
 
-    if (validPhotos.length === 0) return [];
-
-    const albums = [];
-    albums.push({
-      id: 'recent',
-      title: 'Recent Moments',
-      cover: validPhotos[0]?.file_url || validPhotos[0]?.url,
-      items: validPhotos
-    });
-
-    const day13 = validPhotos.filter(m => {
-      const ev = feed.events?.find(e => e.id === m.event_id);
-      return ev?.day === '2026-11-13' || (m.caption && m.caption.toLowerCase().includes('cricket'));
-    });
-    if (day13.length > 0) {
-      albums.push({
-        id: 'day-13',
-        title: '13 Nov (Cricket & Opening)',
-        cover: day13[0].file_url || day13[0].url,
-        items: day13
-      });
-    }
-
-    const day14 = validPhotos.filter(m => {
-      const ev = feed.events?.find(e => e.id === m.event_id);
-      return ev?.day === '2026-11-14' || (m.caption && (m.caption.toLowerCase().includes('sprint') || m.caption.toLowerCase().includes('relay') || m.caption.toLowerCase().includes('track')));
-    });
-    if (day14.length > 0) {
-      albums.push({
-        id: 'day-14',
-        title: '14 Nov (Athletics & Finals)',
-        cover: day14[0].file_url || day14[0].url,
-        items: day14
-      });
-    }
-
-    // Game albums
-    const games = ['Cricket', 'Track & Sprint', 'Badminton', 'Volleyball', 'Kho-Kho'];
-    games.forEach(g => {
-      const gPhotos = validPhotos.filter(m => {
-        const cap = (m.caption || m.title || '').toLowerCase();
-        return cap.includes(g.toLowerCase()) || (g === 'Track & Sprint' && (cap.includes('sprint') || cap.includes('100m') || cap.includes('race')));
-      });
-      if (gPhotos.length > 0) {
-        albums.push({
-          id: `game-${g.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
-          title: g,
-          cover: gPhotos[0].file_url || gPhotos[0].url,
-          items: gPhotos
-        });
-      }
-    });
-
-    (feed.schools || []).forEach(s => {
-      const schoolPhotos = validPhotos.filter(m => {
-        if (m.school_id === s.id) return true;
-        const cap = (m.caption || m.title || '').toLowerCase();
-        return cap.includes(s.short_name.toLowerCase()) || cap.includes((s.code || '').toLowerCase());
-      });
-      if (schoolPhotos.length > 0) {
-        albums.push({
-          id: `school-${s.id}`,
-          title: s.short_name,
-          cover: schoolPhotos[0].file_url || schoolPhotos[0].url,
-          items: schoolPhotos
-        });
-      }
-    });
-
-    const videos = validPhotos.filter(m => m.kind === 'video');
-    if (videos.length > 0) {
-      albums.push({
-        id: 'videos',
-        title: 'Action Videos',
-        cover: videos[0].file_url || videos[0].url,
-        items: videos
-      });
-    }
-
-    return albums;
+  function deriveAlbums(media, feed) {
+    const valid = getValidPhotos(media);
+    if (valid.length === 0) return [];
+    return [{ id: 'all', title: 'All Photos', cover: valid[0]?.file_url || valid[0]?.url, items: valid }];
   }
 
   function renderPhotosScreen() {
     const feed = State.data || {};
-    const media = feed.media || [];
-    const albums = deriveAlbums(media, feed);
-    const selectedAlbum = albums.find(a => a.id === State.selectedAlbumId);
+    const photos = getValidPhotos(feed.media || []);
 
-    if (media.length === 0 || albums.length === 0) {
+    if (photos.length === 0) {
       return `
         <div class="app" style="padding-bottom: 84px;">
           ${renderAppBar('Fiesta Moments')}
@@ -2050,103 +1972,39 @@
       `;
     }
 
-    if (selectedAlbum) {
-      return `
-        <div class="app" style="padding-bottom: 84px;">
-          ${renderAppBar(selectedAlbum.title)}
-          ${renderOfflineBanner()}
-
-          <div class="main">
-            <button 
-              class="link-accent lab row" 
-              onclick="window.App.openAlbum(null)" 
-              style="background: none; border: 0; cursor: pointer; padding: 0; min-height: 40px; gap: 4px;"
-            >
-              ${renderIcon('arrow-left')}
-              All Albums
-            </button>
-
-            <div class="row sb" style="margin: 4px 0 12px;">
-              <span class="ttab">${selectedAlbum.title}</span>
-              <span class="lab mut">${selectedAlbum.items.length} photos</span>
-            </div>
-
-            <div class="photo-masonry-container">
-              <div class="photo-masonry">
-                ${selectedAlbum.items.map((item, idx) => `
-                  <div class="photo-masonry-item" onclick="window.App.openPhotoSwipe(${idx})">
-                    <img 
-                      src="${item.file_url || item.url}" 
-                      alt="Action photo" 
-                      loading="lazy" 
-                      decoding="async"
-                      onerror="const p = this.closest('.photo-masonry-item'); if (p) p.style.display='none';"
-                    >
-                  </div>
-                `).join('')}
-              </div>
-            </div>
-          </div>
-
-          ${renderTabBar()}
-        </div>
-      `;
-    }
-
     return `
       <div class="app" style="padding-bottom: 84px;">
         ${renderAppBar('Fiesta Moments')}
         ${renderOfflineBanner()}
 
         <div class="main">
-          <div class="chips" style="padding-bottom: 4px;">
-            ${albums.map(a => `
-              <button 
-                class="chip" 
-                onclick="window.App.openAlbum('${a.id}')"
-              >
-                ${a.title} (${a.items.length})
-              </button>
-            `).join('')}
+          <div class="row sb" style="margin: 4px 0 14px; align-items: baseline;">
+            <div>
+              <span class="ttab" style="font-size: 18px;">All Photos</span>
+              <span class="lab mut" style="margin-left: 8px;">(${photos.length} photos)</span>
+            </div>
+            <span class="lab mut" style="font-size: 12px;">Tap to expand</span>
           </div>
 
-          <div class="row sb" style="margin: 12px 0 4px;">
-            <span class="ttab">Photo Albums</span>
-            <span class="lab mut">${albums.length} collections</span>
-          </div>
-
-          <div class="albums-grid">
-            ${albums.map(a => `
-              <div class="album-card" onclick="window.App.openAlbum('${a.id}')">
-                <img class="album-cover" src="${a.cover}" alt="${a.title}" loading="lazy" onerror="const p = this.closest('.album-card'); if (p) p.style.display='none';">
-                <div class="album-info">
-                  <div class="album-title">${a.title}</div>
-                  <div class="album-count">${a.items.length} photos</div>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-
-          <!-- All Photos Masonry Grid -->
-          <div class="row sb" style="margin: 20px 0 10px;">
-            <span class="ttab">All Photos (${albums[0]?.items?.length || 0})</span>
-            <span class="lab mut">Tap to view full screen</span>
-          </div>
-
-          <div class="photo-masonry-container">
-            <div class="photo-masonry">
-              ${(albums[0]?.items || []).map((item, idx) => `
-                <div class="photo-masonry-item" onclick="window.App.openPhotoSwipe(${idx})">
+          <div class="photo-direct-grid">
+            ${photos.map((item, idx) => `
+              <div class="photo-direct-card" onclick="window.App.openPhotoSwipe(${idx})">
+                <div class="photo-direct-img-wrap">
                   <img 
                     src="${item.file_url || item.url}" 
                     alt="${escapeHtml(item.caption || item.title || 'Action photo')}" 
                     loading="lazy" 
                     decoding="async"
-                    onerror="const p = this.closest('.photo-masonry-item'); if (p) p.style.display='none';"
+                    onerror="const p = this.closest('.photo-direct-card'); if (p) p.style.display='none';"
                   >
                 </div>
-              `).join('')}
-            </div>
+                ${(item.caption || item.title) ? `
+                  <div class="photo-direct-meta">
+                    <div class="photo-direct-caption">${escapeHtml(item.caption || item.title)}</div>
+                  </div>
+                ` : ''}
+              </div>
+            `).join('')}
           </div>
         </div>
 
@@ -2157,10 +2015,8 @@
 
   function openPhotoSwipe(index = 0) {
     const feed = State.data || {};
-    const media = feed.media || [];
-    const albums = deriveAlbums(media, feed);
-    const selectedAlbum = albums.find(a => a.id === State.selectedAlbumId) || albums[0];
-    if (!selectedAlbum) return;
+    const photos = getValidPhotos(feed.media || []);
+    if (!photos || photos.length === 0) return;
 
     if (!document.getElementById('photoswipe-css')) {
       const link = document.createElement('link');
@@ -2172,7 +2028,7 @@
 
     import('./vendor/photoswipe.esm.min.js').then(module => {
       const PhotoSwipe = module.default;
-      const dataSource = selectedAlbum.items.map(m => ({
+      const dataSource = photos.map(m => ({
         src: m.file_url || m.url,
         w: 1200,
         h: 900
