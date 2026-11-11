@@ -491,15 +491,16 @@
         State.seenMoments.add(dedupeKey);
         const ev = newFeed.events?.find(e => e.id === r.event_id);
         const p1 = r.places?.find(p => p.rank === 1);
-        const winSchool = p1 ? newFeed.schools?.find(s => s.id === p1.school_id) : null;
+        const winSchoolId = p1?.school_id || r.first_place_school_id || r.first_school_id;
+        const winSchool = winSchoolId ? newFeed.schools?.find(s => s.id === winSchoolId) : null;
         newApproved.push({
           eventId: r.event_id,
           category: ev?.category,
           gender: ev?.gender,
           event: ev?.name || 'Athletics Event',
           winner: winSchool?.short_name || 'Winner',
-          points: p1?.points || 20,
-          schoolId: p1?.school_id
+          points: p1?.points || r.points_first || 20,
+          schoolId: winSchoolId
         });
       }
     });
@@ -1370,8 +1371,9 @@
 
     const completedResults = results.filter(r => {
       if (!r) return false;
-      const isApproved = r.status === 'Approved' || r.status === 'Completed';
-      const hasWinner = (r.first_place_school_id) || (r.places && r.places.some(p => p.rank === 1));
+      const s = (r.status || '').toLowerCase();
+      const isApproved = s === 'approved' || s === 'completed';
+      const hasWinner = !!(r.first_place_school_id || r.first_school_id || (r.places && r.places.some(p => p.rank === 1)));
       return isApproved && hasWinner;
     });
     const topResult = completedResults[0];
@@ -1380,10 +1382,10 @@
     let p1Points = 20;
     let p1Athlete = '';
     if (topResult) {
-      const winnerId = topResult.first_place_school_id || (topResult.places && topResult.places.find(p => p.rank === 1)?.school_id);
+      const winnerId = topResult.first_place_school_id || topResult.first_school_id || (topResult.places && topResult.places.find(p => p.rank === 1)?.school_id);
       winSchool = winnerId ? schools.find(s => s.id === winnerId) : null;
-      p1Points = topResult.first_place_points || 20;
-      p1Athlete = topResult.first_place_athlete || '';
+      p1Points = topResult.first_place_points || topResult.points_first || 20;
+      p1Athlete = topResult.first_place_athlete || topResult.athlete_first || '';
     }
     const hasApprovedWinner = Boolean(topResult && winSchool);
 
@@ -2645,7 +2647,11 @@
     const currentEv = ev || events[0] || {};
     const gameName = currentEv.name || 'Athletics Event';
     const res = currentEv.id ? (feed.results || []).find(r => r.event_id === currentEv.id) : null;
-    const places = res?.places || [];
+    const places = (res?.places && res.places.length > 0) ? res.places : (res ? [
+      (res.first_place_school_id || res.first_school_id) ? { rank: 1, school_id: res.first_place_school_id || res.first_school_id, points: res.points_first || 20, athlete: res.athlete_first || '' } : null,
+      (res.second_place_school_id || res.second_school_id) ? { rank: 2, school_id: res.second_place_school_id || res.second_school_id, points: res.points_second || 15, athlete: res.athlete_second || '' } : null,
+      (res.third_place_school_id || res.third_school_id) ? { rank: 3, school_id: res.third_place_school_id || res.third_school_id, points: res.points_third || 10, athlete: res.athlete_third || '' } : null
+    ].filter(Boolean) : []);
     const p1 = places.find(p => p.rank === 1);
     const p2 = places.find(p => p.rank === 2);
     const p3 = places.find(p => p.rank === 3);
@@ -2653,6 +2659,7 @@
     const s1 = p1 ? feed.schools?.find(s => s.id === p1.school_id) : null;
     const s2 = p2 ? feed.schools?.find(s => s.id === p2.school_id) : null;
     const s3 = p3 ? feed.schools?.find(s => s.id === p3.school_id) : null;
+    const isCompleted = currentEv.status === 'Completed' || (res && ((res.status || '').toLowerCase() === 'completed' || (res.status || '').toLowerCase() === 'approved'));
 
     return `
       <div class="app" style="padding-bottom: 84px;">
@@ -2667,7 +2674,7 @@
           <div class="card col" style="gap: 12px;">
             <div class="row sb">
               <span class="ttab">${currentEv.category || 'Sub-Junior'} · ${currentEv.gender || 'Boys'}</span>
-              <span class="${currentEv.status === 'Completed' ? 'st done' : 'st'}">${currentEv.status || 'Scheduled'}</span>
+              <span class="${isCompleted ? 'st done' : 'st'}">${isCompleted ? 'Completed' : (currentEv.status || 'Scheduled')}</span>
             </div>
             <div class="dsp h-title" style="margin: 0; font-size: 24px;">${currentEv.name || gameName}</div>
             <div class="lab mut">${currentEv.venue || EVENT_CONFIG.venue} · Scheduled: ${currentEv.time || '09:00 AM'}</div>
