@@ -1924,7 +1924,7 @@
     document.body.appendChild(script);
   }
 
-  // --- SCREEN 4: PHOTOS (ALL PHOTOS DIRECT GALLERY & PHOTOSWIPE V5) ---
+  // --- SCREEN 4: PHOTOS (ALL PHOTOS DIRECT GALLERY & ADVANCED PHOTOSWIPE V5) ---
   function isNotLogo(u) {
     if (!u) return false;
     const s = u.toLowerCase();
@@ -1947,6 +1947,66 @@
     const valid = getValidPhotos(media);
     if (valid.length === 0) return [];
     return [{ id: 'all', title: 'All Photos', cover: valid[0]?.file_url || valid[0]?.url, items: valid }];
+  }
+
+  async function downloadPhoto(url, filename) {
+    if (!url) return;
+    const cleanName = (filename || 'Sports-Fiesta-Photo.jpg').replace(/[^a-zA-Z0-9_.-]/g, '_');
+    const targetFilename = cleanName.toLowerCase().endsWith('.jpg') || cleanName.toLowerCase().endsWith('.png')
+      ? cleanName
+      : `${cleanName}.jpg`;
+
+    try {
+      showToast('Downloading photo...');
+      const res = await fetch(url, { mode: 'cors' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = targetFilename;
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(blobUrl);
+      }, 500);
+      showToast('Photo downloaded!');
+    } catch (err) {
+      console.warn('[Download fallback]', err);
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.download = targetFilename;
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        if (link.parentNode) link.parentNode.removeChild(link);
+      }, 500);
+      showToast('Photo opened in new tab');
+    }
+  }
+
+  async function loadPhotoSwipeModule() {
+    try {
+      const mod = await import('./vendor/photoswipe.esm.min.js');
+      if (mod && mod.default) return mod.default;
+    } catch (e1) {
+      console.warn('[PhotoSwipe] Local module failed, trying jsdelivr CDN...', e1.message);
+    }
+    try {
+      const mod = await import('https://cdn.jsdelivr.net/npm/photoswipe@5.4.4/dist/photoswipe.esm.min.js');
+      if (mod && mod.default) return mod.default;
+    } catch (e2) {
+      console.warn('[PhotoSwipe] jsdelivr failed, trying unpkg CDN...', e2.message);
+    }
+    try {
+      const mod = await import('https://unpkg.com/photoswipe@5.4.4/dist/photoswipe.esm.js');
+      if (mod && mod.default) return mod.default;
+    } catch (e3) {
+      console.error('[PhotoSwipe] All PhotoSwipe imports failed:', e3.message);
+    }
+    return null;
   }
 
   function renderPhotosScreen() {
@@ -1983,13 +2043,13 @@
               <span class="ttab" style="font-size: 18px;">All Photos</span>
               <span class="lab mut" style="margin-left: 8px;">(${photos.length} photos)</span>
             </div>
-            <span class="lab mut" style="font-size: 12px;">Tap to expand</span>
+            <span class="lab mut" style="font-size: 12px;">Tap photo to swipe · Tap icon to download</span>
           </div>
 
           <div class="photo-direct-grid">
             ${photos.map((item, idx) => `
-              <div class="photo-direct-card" onclick="window.App.openPhotoSwipe(${idx})">
-                <div class="photo-direct-img-wrap">
+              <div class="photo-direct-card">
+                <div class="photo-direct-img-wrap" onclick="window.App.openPhotoSwipe(${idx})">
                   <img 
                     src="${item.file_url || item.url}" 
                     alt="${escapeHtml(item.caption || item.title || 'Action photo')}" 
@@ -1997,12 +2057,29 @@
                     decoding="async"
                     onerror="const p = this.closest('.photo-direct-card'); if (p) p.style.display='none';"
                   >
-                </div>
-                ${(item.caption || item.title) ? `
-                  <div class="photo-direct-meta">
-                    <div class="photo-direct-caption">${escapeHtml(item.caption || item.title)}</div>
+                  <div class="photo-expand-badge" title="Tap to expand">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="15 3 21 3 21 9"></polyline>
+                      <polyline points="9 21 3 21 3 15"></polyline>
+                      <line x1="21" y1="3" x2="14" y2="10"></line>
+                      <line x1="3" y1="21" x2="10" y2="14"></line>
+                    </svg>
                   </div>
-                ` : ''}
+                </div>
+                <div class="photo-direct-meta row sb">
+                  <div class="photo-direct-caption" title="${escapeHtml(item.caption || item.title || 'Stadium action')}">
+                    ${escapeHtml(item.caption || item.title || 'Stadium Action')}
+                  </div>
+                  <button 
+                    type="button"
+                    class="photo-card-download-btn" 
+                    onclick="event.stopPropagation(); window.App.downloadPhoto('${item.file_url || item.url}', '${escapeHtml((item.caption || item.title || 'sports-fiesta').replace(/[^a-zA-Z0-9_-]/g, '_'))}.jpg')"
+                    title="Download High-Res Photo"
+                    aria-label="Download photo"
+                  >
+                    ${renderIcon('download')}
+                  </button>
+                </div>
               </div>
             `).join('')}
           </div>
@@ -2018,28 +2095,50 @@
     const photos = getValidPhotos(feed.media || []);
     if (!photos || photos.length === 0) return;
 
-    if (!document.getElementById('photoswipe-css')) {
-      const link = document.createElement('link');
-      link.id = 'photoswipe-css';
-      link.rel = 'stylesheet';
-      link.href = './vendor/photoswipe.css';
-      document.head.appendChild(link);
-    }
+    loadPhotoSwipeModule().then(PhotoSwipe => {
+      if (!PhotoSwipe) {
+        window.open(photos[index]?.file_url || photos[index]?.url, '_blank');
+        return;
+      }
 
-    import('./vendor/photoswipe.esm.min.js').then(module => {
-      const PhotoSwipe = module.default;
-      const dataSource = photos.map(m => ({
-        src: m.file_url || m.url,
-        w: 1200,
-        h: 900
-      }));
+      const cardImgs = document.querySelectorAll('.photo-direct-card img');
+      const dataSource = photos.map((m, i) => {
+        const img = cardImgs[i];
+        const w = (img && img.naturalWidth) ? img.naturalWidth : 1600;
+        const h = (img && img.naturalHeight) ? img.naturalHeight : 1200;
+        const title = m.caption || m.title || 'Stadium Action Photo';
+        return {
+          src: m.file_url || m.url,
+          msrc: m.file_url || m.url,
+          w,
+          h,
+          title,
+          alt: title
+        };
+      });
 
       const pswp = new PhotoSwipe({
         dataSource,
-        index,
-        bgOpacity: 0.95,
+        index: Math.max(0, Math.min(index, dataSource.length - 1)),
+        bgOpacity: 0.94,
         closeOnVerticalDrag: true,
-        wheelToZoom: true
+        wheelToZoom: true,
+        pinchToClose: true,
+        padding: { top: 20, bottom: 60, left: 10, right: 10 }
+      });
+
+      pswp.on('imageLoadComplete', (e) => {
+        const slide = e.slide;
+        if (slide && slide.data && slide.content && slide.content.element) {
+          const img = slide.content.element;
+          if (img.naturalWidth && img.naturalHeight) {
+            if (slide.data.w !== img.naturalWidth || slide.data.h !== img.naturalHeight) {
+              slide.data.w = img.naturalWidth;
+              slide.data.h = img.naturalHeight;
+              pswp.refreshSlideContent(slide.index);
+            }
+          }
+        }
       });
 
       pswp.on('uiRegister', function() {
@@ -2047,19 +2146,48 @@
           name: 'download-button',
           order: 8,
           isButton: true,
-          tagName: 'a',
-          html: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg>',
-          onClick: (event, el) => {
-            const item = pswp.currSlide.data;
-            el.href = item.src;
-            el.download = 'fiesta-photo.jpg';
+          tagName: 'button',
+          html: '<svg class="pswp__icn" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin: auto;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>',
+          title: 'Download High-Res Photo',
+          onClick: () => {
+            const item = pswp.currSlide?.data;
+            if (item) {
+              const url = item.src;
+              const rawTitle = item.title || 'sports-fiesta-2026';
+              const filename = rawTitle.replace(/[^a-zA-Z0-9_-]/g, '_') + '.jpg';
+              downloadPhoto(url, filename);
+            }
+          }
+        });
+
+        pswp.ui.registerElement({
+          name: 'custom-caption',
+          order: 9,
+          isButton: false,
+          appendTo: 'root',
+          html: '',
+          onInit: (el, pswpInstance) => {
+            el.className = 'pswp__custom-caption';
+            const updateCaption = () => {
+              const currSlide = pswpInstance.currSlide;
+              if (currSlide && currSlide.data && currSlide.data.title) {
+                el.innerHTML = `<div class="pswp__caption-text">${escapeHtml(currSlide.data.title)}</div>`;
+                el.style.display = 'block';
+              } else {
+                el.innerHTML = '';
+                el.style.display = 'none';
+              }
+            };
+            pswpInstance.on('change', updateCaption);
+            updateCaption();
           }
         });
       });
 
       pswp.init();
     }).catch(err => {
-      console.warn('PhotoSwipe dynamic import fallback:', err);
+      console.warn('PhotoSwipe init error:', err);
+      window.open(photos[index]?.file_url || photos[index]?.url, '_blank');
     });
   }
 
@@ -3915,6 +4043,9 @@
     },
     openPhotoSwipe(index) {
       openPhotoSwipe(index);
+    },
+    downloadPhoto(url, filename) {
+      downloadPhoto(url, filename);
     },
     setFixtureDay(day) {
       State.fixtureDay = day;
