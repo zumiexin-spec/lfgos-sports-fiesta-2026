@@ -2600,7 +2600,7 @@
               ${comps.map(c => `
                 <a href="#team?comp=${c.id}&tab=fixtures" class="card row sb" style="text-decoration: none; color: inherit;">
                   <div>
-                    <div style="font-weight: 800; font-size: 16px;">${c.name}</div>
+                    <div style="font-weight: 800; font-size: 16px;">${escapeHtml(c.name || c.game || 'Championship')}</div>
                     <div class="lab mut">${c.gender || 'Boys & Girls'} · Classes ${c.classes || 'All'}</div>
                   </div>
                   <span class="link-accent lab">View &rarr;</span>
@@ -2765,12 +2765,13 @@
     const feed = State.data || {};
     const compId = State.routeParams.comp || State.routeParams.id;
     const comps = feed.competitions || [];
-    const comp = compId ? comps.find(c => c.id === compId || (c.name && c.name.toLowerCase().includes(compId.toLowerCase()))) : comps[0];
+    const comp = compId ? comps.find(c => c.id === compId || ((c.name || c.game) && (c.name || c.game).toLowerCase().includes(compId.toLowerCase()))) : comps[0];
 
     if (compId && !comp) {
       return render404Screen('Team competition not found.');
     }
     const currentComp = comp || comps[0] || {};
+    const compDisplayName = currentComp.name || currentComp.game || 'Team Championship';
     const activeTab = State.routeParams.tab || 'fixtures';
     const compFixtures = (feed.fixtures || []).filter(f => f.competition_id === currentComp.id);
     const schools = feed.schools || [];
@@ -2782,7 +2783,7 @@
 
     return `
       <div class="app" style="padding-bottom: 84px;">
-        ${renderAppBar(currentComp.name || 'Team Championship', { breadcrumb: 'Games > ' + (currentComp.name || 'Team Sport'), backHref: '#games' })}
+        ${renderAppBar(compDisplayName, { breadcrumb: 'Games > ' + compDisplayName, backHref: '#games' })}
         ${renderOfflineBanner()}
         <div class="main col" style="gap: 14px;">
           <a href="#games" class="link-accent lab row" style="min-height: 40px; gap: 4px; align-self: flex-start;">
@@ -2795,7 +2796,7 @@
               <span class="ttab">${currentComp.gender || 'Boys & Girls'} · Classes ${currentComp.classes || 'All'}</span>
               <span class="${currentComp.status === 'Completed' ? 'st done' : 'st'}">${currentComp.status || 'Active'}</span>
             </div>
-            <div class="dsp h-title" style="margin: 0; font-size: 24px;">${currentComp.name || 'Championship'}</div>
+            <div class="dsp h-title" style="margin: 0; font-size: 24px;">${compDisplayName}</div>
             <div class="lab mut">${EVENT_CONFIG.venue}</div>
           </div>
 
@@ -2891,7 +2892,7 @@
                     ${renderSchoolCrest(champSchool, 'c72')}
                   </div>
                   <div class="dsp h-title" style="margin: 0; font-size: 22px; color: var(--tx);">${escapeHtml(champSchool.name)}</div>
-                  <div class="lab mut" style="font-size: 13px;">Winner of the 2026 ${escapeHtml(currentComp.name)} Tournament</div>
+                  <div class="lab mut" style="font-size: 13px;">Winner of the 2026 ${escapeHtml(compDisplayName)} Tournament</div>
                   <span class="link-accent lab" style="margin-top: 4px;">View School Profile &rarr;</span>
                 </a>
 
@@ -3208,8 +3209,8 @@
             </section>
           ` : ''}
 
-          <!-- (f) Campus & Contact Block (Hidden for Kiriharapur pending user confirmation) -->
-          ${(currentSchool.code !== 'KRP' && currentSchool.id !== '6ae208b1fe097a3f4f0d6fbd' && currentSchool.contact && (contact.photo || contact.address || contact.website)) ? `
+          <!-- (f) Campus & Contact Block -->
+          ${(contact && (contact.photo || contact.address || contact.website)) ? `
           <section class="card col" style="gap: 14px; width: 100%;">
             <span class="ttab" style="align-self: flex-start; margin-left: -16px; margin-top: -4px;">Campus & Location</span>
             

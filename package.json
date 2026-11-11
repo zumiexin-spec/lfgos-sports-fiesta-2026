@@ -14,7 +14,8 @@
     "test:ui": "node tests/ui.test.mjs"
   },
   "dependencies": {
-    "@vercel/functions": "^1.6.0"
+    "@vercel/functions": "^1.6.0",
+    "disable-devtool": "^0.3.9"
   },
   "devDependencies": {
     "axe-core": "^4.14.0",

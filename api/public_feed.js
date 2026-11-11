@@ -45,7 +45,7 @@ let lastGoodPayloadString = null;
 let lastGoodEtag = null;
 let isWarmingInProgress = false;
 
-const CACHE_TTL_MS = 15000; // 15 seconds edge/in-memory fresh window
+const CACHE_TTL_MS = 3000; // 3 seconds edge/in-memory fresh window
 
 // Guaranteed bundled fallback feed
 let bundledFallback = null;
@@ -75,51 +75,52 @@ async function fetchAndBuildFeed(timeoutMs = 8000) {
   let displayState = {};
   let previousVersion = cachedPayload?.version || 0;
 
-  // 1. Try LiveSnapshot first (fast source)
+  // 1. Fetch directly from live Render database entities (direct read from Render upstream)
   try {
-    const snapResult = await fetchLiveSnapshot({
-      baseUrl,
-      proxyKey,
-      etag: lastRenderSnapshotEtag,
-      timeoutMs
-    });
-
-    if (snapResult && snapResult.notModified && cachedPayload) {
-      // Upstream data has not changed
-      lastCacheTime = Date.now();
-      return { payload: cachedPayload, payloadString: cachedPayloadString, etag: cachedEtag };
-    }
-
-    if (snapResult && snapResult.data && snapResult.data.schools) {
-      const snap = snapResult.data;
-      schools = snap.schools || [];
-      events = snap.events || [];
-      competitions = snap.competitions || [];
-      results = snap.results || [];
-      fixtures = snap.fixtures || [];
-      announcements = snap.announcements || [];
-      media = snap.media || [];
-      pointsLedger = snap.totals || [];
-      displayState = snap.config || {};
-      if (snapResult.etag) lastRenderSnapshotEtag = snapResult.etag;
-    } else {
-      throw new Error('Snapshot empty or invalid, fallback to entity reads');
-    }
-  } catch (snapErr) {
-    // 2. Fallback to reading allowlisted entities concurrently
-    if (snapErr instanceof RenderColdStartTimeoutError) {
-      throw snapErr;
-    }
     const dataMap = await fetchAllEntities({ baseUrl, proxyKey, timeoutMs });
-    schools = dataMap.school || [];
-    events = dataMap.sport_event || [];
-    competitions = dataMap.team_competition || [];
-    results = dataMap.event_result || [];
-    fixtures = dataMap.fixture || [];
-    announcements = dataMap.announcement || [];
-    media = dataMap.media_item || [];
-    pointsLedger = dataMap.points_ledger || [];
-    displayState = (dataMap.display_state && dataMap.display_state[dataMap.display_state.length - 1]) || {};
+    if (dataMap.school && dataMap.school.length > 0) {
+      schools = dataMap.school || [];
+      events = dataMap.sport_event || [];
+      competitions = dataMap.team_competition || [];
+      results = dataMap.event_result || [];
+      fixtures = dataMap.fixture || [];
+      announcements = dataMap.announcement || [];
+      media = dataMap.media_item || [];
+      pointsLedger = dataMap.points_ledger || [];
+      displayState = (dataMap.display_state && dataMap.display_state[dataMap.display_state.length - 1]) || {};
+    } else {
+      throw new Error('Entity read returned empty schools, fallback to snapshot');
+    }
+  } catch (entityErr) {
+    if (entityErr instanceof RenderColdStartTimeoutError) {
+      throw entityErr;
+    }
+    // Fallback to LiveSnapshot if concurrent entity read encounters an error
+    try {
+      const snapResult = await fetchLiveSnapshot({
+        baseUrl,
+        proxyKey,
+        etag: lastRenderSnapshotEtag,
+        timeoutMs: 3000
+      });
+      if (snapResult && snapResult.data && snapResult.data.schools) {
+        const snap = snapResult.data;
+        schools = snap.schools || [];
+        events = snap.events || [];
+        competitions = snap.competitions || [];
+        results = snap.results || [];
+        fixtures = snap.fixtures || [];
+        announcements = snap.announcements || [];
+        media = snap.media || [];
+        pointsLedger = snap.totals || [];
+        displayState = snap.config || {};
+        if (snapResult.etag) lastRenderSnapshotEtag = snapResult.etag;
+      } else {
+        throw entityErr;
+      }
+    } catch (snapErr) {
+      throw entityErr;
+    }
   }
 
   // 3. Build public payload via strict shared feed builder

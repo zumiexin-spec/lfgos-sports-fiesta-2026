@@ -265,11 +265,11 @@ async function runSuite() {
             assert(bracketCheck.allAround72, `Tournament Bracket match cards have 72px height`);
           }
 
-          if (route.name === 'School-Kiriharapur-NoContact') {
+          if (route.name === 'School-Kiriharapur-NoContact' || route.name === 'School-Kiriharapur-Contact') {
             const hasContact = await page.evaluate(() => {
-              return !!document.querySelector('.school-contact-card') || document.body.innerText.includes('Campus & Contact');
+              return document.body.innerText.includes('Campus & Location') || document.body.innerText.includes('Ballia');
             });
-            assert(!hasContact, 'School Kiriharapur strictly hides contact card pending user confirmation');
+            assert(hasContact, 'School Kiriharapur displays confirmed Ballia campus contact card');
           }
 
           // Screenshot capture
