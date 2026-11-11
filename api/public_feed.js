@@ -1,11 +1,53 @@
-// Vercel Serverless Function: /api/public_feed
+/**
+ * LFGOS Sports Fiesta 2026 - Public Feed API
+ * Vercel Serverless Function: /api/public_feed
+ *
+ * Data Path: Browser -> /api/public_feed -> Render Proxy -> Base44
+ * Strict Invariants:
+ * - Read-only public feed (GET / HEAD / OPTIONS)
+ * - Upstream queries restricted to allowlist only
+ * - Upstream timeout 8s with non-blocking cold-start 503 {"warming":true} + waitUntil background wake-up
+ * - Last good payload caching with stale-while-revalidate & stale-if-error
+ * - ETag calculation and conditional 304 Not Modified
+ */
+
 const crypto = require('crypto');
+const { buildPublicPayload } = require('../lib/feed_builder');
+const {
+  fetchLiveSnapshot,
+  fetchAllEntities,
+  RenderColdStartTimeoutError,
+  RenderClientError
+} = require('../lib/render_client');
 
-let cachedFeed = null;
+// Safe graceful fallback for @vercel/functions waitUntil
+let vercelWaitUntil = (promise) => {
+  if (promise && typeof promise.catch === 'function') {
+    promise.catch(err => console.warn('[waitUntil fallback] unhandled background error:', err.message));
+  }
+};
+try {
+  const vf = require('@vercel/functions');
+  if (vf && typeof vf.waitUntil === 'function') {
+    vercelWaitUntil = vf.waitUntil;
+  }
+} catch (e) {
+  // Graceful fallback in environments where @vercel/functions is not installed
+}
+
+// In-memory cache across serverless warm invocations
+let cachedPayload = null;
+let cachedPayloadString = null;
+let cachedEtag = null;
 let lastCacheTime = 0;
-const CACHE_TTL_MS = 15000; // 15-second in-memory cache
+let lastRenderSnapshotEtag = null;
+let lastGoodPayloadString = null;
+let lastGoodEtag = null;
+let isWarmingInProgress = false;
 
-// Guaranteed fallback data bundled in lambda directory
+const CACHE_TTL_MS = 15000; // 15 seconds edge/in-memory fresh window
+
+// Guaranteed bundled fallback feed
 let bundledFallback = null;
 try {
   bundledFallback = require('./fallback_feed.json');
@@ -15,258 +57,228 @@ try {
   } catch (e2) {}
 }
 
-function sanitizeFeed(feed) {
-  if (!feed) return null;
+/**
+ * Fetch fresh data from Render upstream and update cache.
+ */
+async function fetchAndBuildFeed(timeoutMs = 8000) {
+  const baseUrl = process.env.RENDER_API_BASE || 'https://lfgos-api.onrender.com';
+  const proxyKey = process.env.RENDER_PROXY_KEY;
 
-  // Filter test announcements
-  if (Array.isArray(feed.announcements)) {
-    feed.announcements = feed.announcements.filter(a => {
-      if (!a || !a.message) return false;
-      if (a.active === false) return false;
-      if (a.expires_at && new Date(a.expires_at).getTime() < Date.now()) return false;
-      const msg = (a.message || '').toLowerCase();
-      if (msg.includes('probe') || msg.includes('safe to ignore') || msg.includes('dummy') || msg.includes('test message')) {
-        return false;
-      }
-      return true;
-    });
-  }
+  let schools = [];
+  let events = [];
+  let competitions = [];
+  let results = [];
+  let fixtures = [];
+  let announcements = [];
+  let media = [];
+  let pointsLedger = [];
+  let displayState = {};
+  let previousVersion = cachedPayload?.version || 0;
 
-  // Filter media: approved AND consent_approved only
-  if (Array.isArray(feed.media)) {
-    feed.media = feed.media.filter(m => m && m.approved !== false && m.consent_approved !== false);
-  }
-
-  // Remove internal/secret properties
-  delete feed.secret;
-  delete feed.token;
-  delete feed.api_key;
-  delete feed.base44_secret;
-
-  return feed;
-}
-
-function calculateStandings(schools, pointsLedger, results, fixtures) {
-  if (!Array.isArray(schools)) return [];
-  const pointsMap = new Map();
-  const medalsMap = new Map();
-  const matchesWonMap = new Map();
-
-  schools.forEach(s => {
-    if (s && s.id) {
-      pointsMap.set(s.id, 0);
-      medalsMap.set(s.id, { first: 0, second: 0, third: 0 });
-      matchesWonMap.set(s.id, 0);
-    }
-  });
-
-  // Calculate points from PointsLedger strictly excluding reversed rows
-  (pointsLedger || []).forEach(row => {
-    if (!row || row.is_reversed || row.reversed || !row.school_id) return;
-    const cur = pointsMap.get(row.school_id) || 0;
-    pointsMap.set(row.school_id, cur + (Number(row.points) || 0));
-  });
-
-  // Medals from Approved / Completed results only
-  (results || []).forEach(r => {
-    if (!r || (r.status !== 'Approved' && r.status !== 'Completed')) return;
-    if (r.first_place_school_id && medalsMap.has(r.first_place_school_id)) medalsMap.get(r.first_place_school_id).first++;
-    if (r.second_place_school_id && medalsMap.has(r.second_place_school_id)) medalsMap.get(r.second_place_school_id).second++;
-    if (r.third_place_school_id && medalsMap.has(r.third_place_school_id)) medalsMap.get(r.third_place_school_id).third++;
-  });
-
-  // Matches won from completed fixtures only
-  (fixtures || []).forEach(f => {
-    if (!f || f.status !== 'Completed' || !f.winner_school_id) return;
-    if (matchesWonMap.has(f.winner_school_id)) {
-      matchesWonMap.set(f.winner_school_id, matchesWonMap.get(f.winner_school_id) + 1);
-    }
-  });
-
-  return schools.map(s => ({
-    ...s,
-    points: pointsMap.has(s.id) ? pointsMap.get(s.id) : (s.points || 0),
-    medals: medalsMap.get(s.id) || s.medals || { first: 0, second: 0, third: 0 },
-    matches_won: matchesWonMap.get(s.id) || s.matches_won || 0
-  })).sort((a, b) => {
-    const pDiff = (b.points || 0) - (a.points || 0);
-    if (pDiff !== 0) return pDiff;
-    const gDiff = (b.medals?.first || 0) - (a.medals?.first || 0);
-    if (gDiff !== 0) return gDiff;
-    const sDiff = (b.medals?.second || 0) - (a.medals?.second || 0);
-    if (sDiff !== 0) return sDiff;
-    const zDiff = (b.medals?.third || 0) - (a.medals?.third || 0);
-    if (zDiff !== 0) return zDiff;
-    return (b.matches_won || 0) - (a.matches_won || 0);
-  });
-}
-
-// Resilient Base44 Fetcher using Node 18+ native fetch
-async function fetchFromBase44() {
-  const appId = process.env.BASE44_APP_ID;
-  const appSecret = process.env.BASE44_APP_SECRET || process.env.BASE44_APP_TOKEN;
-
-  if (!appId || !appSecret) {
-    return null;
-  }
-
-  const baseUrl = `https://base44.app/api/apps/${appId}`;
-  const headers = {
-    'Authorization': `Bearer ${appSecret}`,
-    'Accept': 'application/json'
-  };
-
-  const fetchEntity = async (entityName) => {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 4500);
-      const res = await fetch(`${baseUrl}/entities/${entityName}`, {
-        headers,
-        signal: controller.signal
-      });
-      clearTimeout(timeout);
-      if (!res.ok) return [];
-      const json = await res.json();
-      return Array.isArray(json) ? json : (json.records || []);
-    } catch (err) {
-      return [];
-    }
-  };
-
+  // 1. Try LiveSnapshot first (fast source)
   try {
-    const [
-      schoolsRaw,
-      eventsRaw,
-      compsRaw,
-      resultsRaw,
-      fixturesRaw,
-      announcementsRaw,
-      mediaRaw,
-      displaysRaw,
-      pointsLedgerRaw
-    ] = await Promise.all([
-      fetchEntity('School'),
-      fetchEntity('SportEvent'),
-      fetchEntity('TeamCompetition'),
-      fetchEntity('EventResult'),
-      fetchEntity('Fixture'),
-      fetchEntity('Announcement'),
-      fetchEntity('MediaItem'),
-      fetchEntity('DisplayState'),
-      fetchEntity('PointsLedger')
-    ]);
-
-    if (!schoolsRaw || schoolsRaw.length === 0) {
-      return null;
-    }
-
-    const displayState = displaysRaw && displaysRaw.length > 0 ? displaysRaw[displaysRaw.length - 1] : {};
-
-    // Filter confirmed/scheduled fixtures with confirmed schools or scheduled time/date
-    const validFixtures = (fixturesRaw || []).filter(f => {
-      if (!f) return false;
-      const hasTime = !!(f.scheduled_time || f.date || f.day || f.time);
-      const hasSchools = !!(f.school_a_id || f.school_b_id || f.team_a || f.team_b);
-      const isConfirmed = f.status && f.status !== 'Awaiting opponent' && f.status !== 'unscheduled';
-      return (hasTime || hasSchools) && isConfirmed;
+    const snapResult = await fetchLiveSnapshot({
+      baseUrl,
+      proxyKey,
+      etag: lastRenderSnapshotEtag,
+      timeoutMs
     });
 
-    const schools = calculateStandings(schoolsRaw, pointsLedgerRaw, resultsRaw, validFixtures);
+    if (snapResult && snapResult.notModified && cachedPayload) {
+      // Upstream data has not changed
+      lastCacheTime = Date.now();
+      return { payload: cachedPayload, payloadString: cachedPayloadString, etag: cachedEtag };
+    }
 
-    return {
-      version: Date.now(),
-      updated_at: new Date().toISOString(),
-      meet: {
-        title: "LFGOS Sports Fiesta 2026",
-        dates: ["2026-11-13", "2026-11-14"],
-        venue: "Dr. Bhimrao Ambedkar Sports Stadium, Mau"
-      },
-      schools,
-      events: eventsRaw || [],
-      competitions: compsRaw || [],
-      results: (resultsRaw || []).filter(r => r.status === 'Approved' || r.status === 'Completed'),
-      fixtures: validFixtures,
-      announcements: announcementsRaw || [],
-      media: (mediaRaw || []).filter(m => m.approved !== false && m.consent_approved !== false),
-      display_state: displayState
-    };
+    if (snapResult && snapResult.data && snapResult.data.schools) {
+      const snap = snapResult.data;
+      schools = snap.schools || [];
+      events = snap.events || [];
+      competitions = snap.competitions || [];
+      results = snap.results || [];
+      fixtures = snap.fixtures || [];
+      announcements = snap.announcements || [];
+      media = snap.media || [];
+      pointsLedger = snap.totals || [];
+      displayState = snap.config || {};
+      if (snapResult.etag) lastRenderSnapshotEtag = snapResult.etag;
+    } else {
+      throw new Error('Snapshot empty or invalid, fallback to entity reads');
+    }
+  } catch (snapErr) {
+    // 2. Fallback to reading allowlisted entities concurrently
+    if (snapErr instanceof RenderColdStartTimeoutError) {
+      throw snapErr;
+    }
+    const dataMap = await fetchAllEntities({ baseUrl, proxyKey, timeoutMs });
+    schools = dataMap.school || [];
+    events = dataMap.sport_event || [];
+    competitions = dataMap.team_competition || [];
+    results = dataMap.event_result || [];
+    fixtures = dataMap.fixture || [];
+    announcements = dataMap.announcement || [];
+    media = dataMap.media_item || [];
+    pointsLedger = dataMap.points_ledger || [];
+    displayState = (dataMap.display_state && dataMap.display_state[dataMap.display_state.length - 1]) || {};
+  }
+
+  // 3. Build public payload via strict shared feed builder
+  const built = buildPublicPayload({
+    schools,
+    events,
+    competitions,
+    results,
+    fixtures,
+    announcements,
+    media,
+    pointsLedger,
+    displayState,
+    previousVersion
+  });
+
+  const payloadString = JSON.stringify(built);
+  const etag = `"${crypto.createHash('sha256').update(payloadString).digest('hex').slice(0, 16)}"`;
+
+  // Update memory cache
+  cachedPayload = built;
+  cachedPayloadString = payloadString;
+  cachedEtag = etag;
+  lastCacheTime = Date.now();
+  lastGoodPayloadString = payloadString;
+  lastGoodEtag = etag;
+
+  return { payload: built, payloadString, etag };
+}
+
+/**
+ * Background wake-up task for Render using waitUntil.
+ */
+async function backgroundWarmRender() {
+  if (isWarmingInProgress) return;
+  isWarmingInProgress = true;
+  try {
+    console.log('[Background WakeUp] Waking Render upstream in background...');
+    // Allow up to 45 seconds for cold start in background
+    await fetchAndBuildFeed(45000);
+    console.log('[Background WakeUp] Render is awake and cache is populated.');
   } catch (err) {
-    console.warn('[Vercel API] Base44 query failed:', err.message);
-    return null;
+    console.warn('[Background WakeUp] Background warming attempt failed:', err.message);
+  } finally {
+    isWarmingInProgress = false;
   }
 }
 
 module.exports = async function handler(req, res) {
-  try {
-    // CORS Preflight
-    if (req.method === 'OPTIONS') {
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, If-None-Match');
-      res.status(204).end();
-      return;
-    }
-
-    // Read-only public endpoint
-    if (req.method !== 'GET' && req.method !== 'HEAD') {
-      res.status(405).json({ error: 'Method Not Allowed', message: 'The public feed is strictly read-only.' });
-      return;
-    }
-
-    const now = Date.now();
-    let feed = cachedFeed;
-
-    if (!feed || (now - lastCacheTime > CACHE_TTL_MS)) {
-      const liveFeed = await fetchFromBase44();
-      if (liveFeed) {
-        feed = liveFeed;
-      } else if (!feed) {
-        feed = bundledFallback ? JSON.parse(JSON.stringify(bundledFallback)) : null;
-      }
-      if (feed) {
-        feed = sanitizeFeed(feed);
-        cachedFeed = feed;
-        lastCacheTime = now;
-      }
-    }
-
-    // Guaranteed fallback: if still null, use bundledFallback
-    if (!feed && bundledFallback) {
-      feed = sanitizeFeed(JSON.parse(JSON.stringify(bundledFallback)));
-    }
-
-    if (!feed) {
-      res.status(503).json({ error: 'Service Unavailable', message: 'Feed data is temporarily unavailable.' });
-      return;
-    }
-
-    const payload = JSON.stringify(feed);
-    const etag = `"${crypto.createHash('sha256').update(payload).digest('hex').slice(0, 16)}"`;
-
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, s-maxage=15, stale-while-revalidate=60');
-    res.setHeader('ETag', etag);
+  // CORS Preflight
+  if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, If-None-Match');
+    res.status(204).end();
+    return;
+  }
 
-    // Conditional 304 response
-    if (req.headers['if-none-match'] === etag) {
+  // Read-only enforcement
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.setHeader('Allow', 'GET, HEAD, OPTIONS');
+    res.status(405).json({
+      error: 'Method Not Allowed',
+      message: 'The public feed API is strictly read-only.'
+    });
+    return;
+  }
+
+  const now = Date.now();
+  const isFresh = cachedPayload && (now - lastCacheTime < CACHE_TTL_MS);
+
+  // Return fresh in-memory cache if available
+  if (isFresh) {
+    if (req.headers['if-none-match'] === cachedEtag) {
+      res.setHeader('ETag', cachedEtag);
+      res.setHeader('Cache-Control', 'public, s-maxage=15, stale-while-revalidate=60, stale-if-error=600');
       res.status(304).end();
       return;
     }
 
-    res.status(200).send(payload);
-  } catch (fatalErr) {
-    console.error('[Vercel API] Fatal handler error caught:', fatalErr);
-    try {
-      if (bundledFallback) {
-        const payload = JSON.stringify(bundledFallback);
-        res.setHeader('Content-Type', 'application/json; charset=utf-8');
-        res.setHeader('Cache-Control', 'public, s-maxage=10');
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.status(200).send(payload);
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, s-maxage=15, stale-while-revalidate=60, stale-if-error=600');
+    res.setHeader('ETag', cachedEtag);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.status(200).send(cachedPayloadString);
+    return;
+  }
+
+  // Attempt to fetch fresh data from Render
+  try {
+    const { payloadString, etag } = await fetchAndBuildFeed(8000);
+
+    if (req.headers['if-none-match'] === etag) {
+      res.setHeader('ETag', etag);
+      res.setHeader('Cache-Control', 'public, s-maxage=15, stale-while-revalidate=60, stale-if-error=600');
+      res.status(304).end();
+      return;
+    }
+
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, s-maxage=15, stale-while-revalidate=60, stale-if-error=600');
+    res.setHeader('ETag', etag);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.status(200).send(payloadString);
+  } catch (err) {
+    console.warn('[Vercel Function] Upstream fetch failed or timed out:', err.message);
+
+    // If Render timed out (cold start) or errored, keep warming it in the background via waitUntil
+    vercelWaitUntil(backgroundWarmRender());
+
+    // 1. If we have a LAST GOOD payload from earlier in this instance's life, serve it with X-Stale: true
+    // (First visitor before any successful fetch gets 503 {"warming": true})
+    const stalePayload = lastGoodPayloadString;
+    const staleEtag = lastGoodEtag;
+
+    if (stalePayload) {
+      if (req.headers['if-none-match'] === staleEtag) {
+        res.setHeader('ETag', staleEtag);
+        res.setHeader('X-Stale', 'true');
+        res.setHeader('Cache-Control', 'public, s-maxage=10, stale-while-revalidate=30');
+        res.status(304).end();
         return;
       }
-    } catch (e) {}
-    res.status(500).json({ error: 'Internal Server Error', message: fatalErr.message });
+
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Cache-Control', 'public, s-maxage=10, stale-while-revalidate=30');
+      res.setHeader('ETag', staleEtag);
+      res.setHeader('X-Stale', 'true');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.status(200).send(stalePayload);
+      return;
+    }
+
+    // 2. No good payload available anywhere -> Respond fast with 503 and {"warming": true}
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Retry-After', '8');
+    res.status(503).json({
+      warming: true,
+      error: 'Service Warming Up',
+      message: 'The live server is currently waking up from sleep. Please retry in 8 seconds.'
+    });
   }
+};
+
+module.exports._expireCacheForTesting = () => {
+  lastCacheTime = 0;
+};
+
+module.exports._resetAllCacheForTesting = () => {
+  cachedPayload = null;
+  cachedPayloadString = null;
+  cachedEtag = null;
+  lastCacheTime = 0;
+  lastRenderSnapshotEtag = null;
+  lastGoodPayloadString = null;
+  lastGoodEtag = null;
+  isWarmingInProgress = false;
 };

@@ -5,6 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>LFGOS Sports Fiesta 2026</title>
   
+  <!-- Immediate Single URL Enforcement: Strip any hash slug from address bar before render -->
+  <script>
+    if (window.location.hash) {
+      try {
+        window._initialHash = window.location.hash;
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState(null, '', window.location.pathname || '/');
+        }
+      } catch(e) {}
+    }
+  </script>
+
   <!-- Immediate Theme Script to Prevent Theme Flash -->
   <script>
     (function() {
@@ -60,7 +72,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@1,800&family=Barlow:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./fiesta.17221a51.css">
+  <link rel="stylesheet" href="./fiesta.63d76351.css">
 
   <style>
     /* Critical Splash & Base Styles */
@@ -167,6 +179,6 @@
   </script>
   <div id="app-root"></div>
 
-  <script src="./app.2b90846d.js"></script>
+  <script src="./app.98f6ca21.js"></script>
 </body>
 </html>

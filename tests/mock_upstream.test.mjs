@@ -289,6 +289,105 @@ async function runTests() {
     mockServer.close();
   });
 
+  // Test 12-16: End-to-end testing of /api/public_feed.js against local mock Render server
+  await itAsync('Mock Render: /api/public_feed returns 200 with ETag and strict headers', async () => {
+    const publicFeedHandler = (await import('../api/public_feed.js')).default || (await import('../api/public_feed.js'));
+    const handler = typeof publicFeedHandler === 'function' ? publicFeedHandler : publicFeedHandler.default || publicFeedHandler;
+
+    // Create a mock Render server on local ephemeral port
+    const mockRender = http.createServer((req, res) => {
+      const url = req.url;
+      const key = req.headers['x-proxy-key'];
+
+      if (url === '/v1/live_snapshot') {
+        res.writeHead(200, { 'Content-Type': 'application/json', 'ETag': '"render-snap-1"' });
+        res.end(JSON.stringify([
+          {
+            version: 80,
+            chunks: 1,
+            payload_1: JSON.stringify({
+              schools: mockDb.schools,
+              events: mockDb.events,
+              results: mockDb.results,
+              fixtures: mockDb.fixtures,
+              announcements: mockDb.announcements
+            })
+          }
+        ]));
+        return;
+      }
+
+      if (url === '/v1/points_ledger') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(mockDb.points_ledger));
+        return;
+      }
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify([]));
+    });
+
+    await new Promise(resolve => mockRender.listen(0, resolve));
+    const renderPort = mockRender.address().port;
+    const originalBase = process.env.RENDER_API_BASE;
+    process.env.RENDER_API_BASE = `http://127.0.0.1:${renderPort}`;
+
+    try {
+      // Helper to mock Express/Vercel req/res
+      function createMockRes() {
+        return {
+          statusCode: 200,
+          headers: {},
+          body: '',
+          setHeader(k, v) { this.headers[k.toLowerCase()] = v; },
+          status(c) { this.statusCode = c; return this; },
+          send(b) { this.body = b; return this; },
+          json(j) { this.body = JSON.stringify(j); return this; },
+          end(d) { if (d) this.body = d; return this; }
+        };
+      }
+
+      // 1. First fetch: should return 200 with fresh payload
+      const mockReq1 = { method: 'GET', headers: {} };
+      const mockRes1 = createMockRes();
+      await handler(mockReq1, mockRes1);
+
+      assert.strictEqual(mockRes1.statusCode, 200, 'public_feed handler should return 200');
+      assert.ok(mockRes1.headers['etag'], 'Response should have ETag header');
+      const body1 = JSON.parse(mockRes1.body);
+      assert.strictEqual(body1.schools.length, 3, 'Public feed should contain schools');
+
+      // 2. Conditional fetch with matching If-None-Match: should return 304
+      const mockReq2 = { method: 'GET', headers: { 'if-none-match': mockRes1.headers['etag'] } };
+      const mockRes2 = createMockRes();
+      await handler(mockReq2, mockRes2);
+      assert.strictEqual(mockRes2.statusCode, 304, 'public_feed handler should return 304 on matching ETag');
+
+      // 3. Stale-if-error fallback: when Render fails with 500 and cache expired, return stale payload with X-Stale: true
+      if (handler._expireCacheForTesting) handler._expireCacheForTesting();
+      mockRender.close(); // simulate Render outage
+      const mockReq3 = { method: 'GET', headers: {} };
+      const mockRes3 = createMockRes();
+      await handler(mockReq3, mockRes3);
+      assert.strictEqual(mockRes3.statusCode, 200, 'Should fall back to last good payload');
+      assert.strictEqual(mockRes3.headers['x-stale'], 'true', 'Response should carry X-Stale: true');
+
+      // 4. Cold-start without any cached payload: returns 503 {"warming": true} and Retry-After: 8
+      if (handler._resetAllCacheForTesting) handler._resetAllCacheForTesting();
+      process.env.RENDER_API_BASE = 'http://127.0.0.1:1'; // port where nothing is listening
+      const mockReq4 = { method: 'GET', headers: {} };
+      const mockRes4 = createMockRes();
+      await handler(mockReq4, mockRes4);
+      assert.strictEqual(mockRes4.statusCode, 503, 'Cold start with unreachable Render should return 503');
+      assert.strictEqual(mockRes4.headers['retry-after'], '8', '503 should provide Retry-After: 8');
+      const body4 = JSON.parse(mockRes4.body);
+      assert.strictEqual(body4.warming, true, '503 payload should contain warming: true');
+    } finally {
+      process.env.RENDER_API_BASE = originalBase;
+      try { mockRender.close(); } catch (e) {}
+    }
+  });
+
   console.log(`\n========================================`);
   console.log(`MOCK UPSTREAM SYNC SUMMARY: ${passedTests} Passed, ${failedTests} Failed.`);
   console.log(`========================================\n`);

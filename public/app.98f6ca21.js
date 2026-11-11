@@ -26,6 +26,37 @@
     'KSM': 'assets/crests/kasimabad.png'
   };
 
+  // Fixed UI Scaffolding (shown before first live fetch completes, scores strictly '—')
+  const SCAFFOLD_SCHOOLS = [
+    { id: '6ae208b1fe097a3f4f0d6fba', name: 'Little Flower Children School, Sikatiya Mau', short_name: 'LFCS Sikatiya', code: 'SKT', color: '#D0021B', seed: 1, points: '—', medals: { first: '—', second: '—', third: '—' }, matches_won: '—' },
+    { id: '6ae208b1fe097a3f4f0d6fbb', name: 'Little Flower Children School, Ghosi', short_name: 'LFCS Ghosi', code: 'GHS', color: '#0052CC', seed: 2, points: '—', medals: { first: '—', second: '—', third: '—' }, matches_won: '—' },
+    { id: '6ae208b1fe097a3f4f0d6fbc', name: 'Little Flower International School, Khalishpur', short_name: 'LFIS Khalishpur', code: 'KHL', color: '#00875A', seed: 3, points: '—', medals: { first: '—', second: '—', third: '—' }, matches_won: '—' },
+    { id: '6ae208b1fe097a3f4f0d6fbe', name: 'Little Flower Children School, Nizamuddinpura Mau', short_name: 'LFCS Nizamuddinpura', code: 'NZM', color: '#FF8B00', seed: 4, points: '—', medals: { first: '—', second: '—', third: '—' }, matches_won: '—' },
+    { id: '6ae208b1fe097a3f4f0d6fbd', name: 'Little Flower Children School, Kiriharapur', short_name: 'LFCS Kiriharapur', code: 'KRP', color: '#6554C0', seed: 5, points: '—', medals: { first: '—', second: '—', third: '—' }, matches_won: '—' },
+    { id: '6ae208b1fe097a3f4f0d6fbf', name: 'Little Flower Children School, Kasimabad', short_name: 'LFCS Kasimabad', code: 'KSM', color: '#36B37E', seed: 6, points: '—', medals: { first: '—', second: '—', third: '—' }, matches_won: '—' }
+  ];
+
+  const SCAFFOLD_FEED = {
+    meet: {
+      title: 'LFGOS Sports Fiesta 2026',
+      dates: ['2026-11-13', '2026-11-14'],
+      venue: 'Dr. Bhimrao Ambedkar Sports Stadium, Mau'
+    },
+    schools: SCAFFOLD_SCHOOLS,
+    events: [],
+    competitions: [],
+    results: [],
+    fixtures: [],
+    announcements: [],
+    media: [],
+    stream: {
+      active: false,
+      url: '',
+      startTime: '2026-11-14T09:00:00+05:30',
+      notice: 'Live stream broadcast begins 14 Nov 2026'
+    }
+  };
+
   function escapeHtml(str) {
     if (str == null) return '';
     return String(str)
@@ -610,17 +641,29 @@
   // --- DATA FETCHING & 30s SCOPED POLLING ---
   let isFetching = false;
   let fetchTimer = null;
+  const BACKOFF_SCHEDULE = [8000, 8000, 12000, 12000, 20000];
+  let backoffStep = 0;
+  let backoffTimer = null;
+
+  function scheduleBackoffRetry() {
+    if (backoffTimer) clearTimeout(backoffTimer);
+    const delay = BACKOFF_SCHEDULE[Math.min(backoffStep, BACKOFF_SCHEDULE.length - 1)];
+    backoffStep++;
+    console.log(`[Feed] Scheduling warming retry in ${delay}ms (attempt ${backoffStep})`);
+    backoffTimer = setTimeout(() => {
+      fetchPublicFeed();
+    }, delay);
+  }
 
   async function fetchPublicFeed() {
     if (isFetching) return;
     isFetching = true;
 
-    if (!State.data) {
+    // Show warming banner if request takes > 3 seconds
+    if (!fetchTimer) {
       fetchTimer = setTimeout(() => {
-        if (!State.data) {
-          State.isWarmingUp = true;
-          renderApp();
-        }
+        State.isWarmingUp = true;
+        renderApp();
       }, 3000);
     }
 
@@ -631,20 +674,42 @@
       }
       const res = await fetch('/api/public_feed', { headers });
       clearTimeout(fetchTimer);
-      State.isWarmingUp = false;
+      fetchTimer = null;
 
       if (res.status === 304) {
         // Data unchanged, free 304 response
         State.isOffline = false;
+        State.isWarmingUp = false;
+        backoffStep = 0;
+        if (backoffTimer) clearTimeout(backoffTimer);
         isFetching = false;
         dismissSplash();
+        renderApp();
         return;
+      }
+
+      if (res.status === 503) {
+        // Cold start on Render
+        try {
+          const body = await res.json();
+          if (body && body.warming) {
+            State.isWarmingUp = true;
+            scheduleBackoffRetry();
+            renderApp();
+            return;
+          }
+        } catch(e) {}
       }
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       const data = await res.json();
       const newEtag = res.headers.get('etag');
+
+      State.isWarmingUp = false;
+      State.isOffline = false;
+      backoffStep = 0;
+      if (backoffTimer) clearTimeout(backoffTimer);
 
       if (!State.data || data.version !== State.data.version) {
         const prev = State.data;
@@ -696,10 +761,15 @@
       }
       State.isOffline = false;
     } catch (err) {
-      clearTimeout(fetchTimer);
-      State.isWarmingUp = false;
-      State.isOffline = true;
+      if (fetchTimer) {
+        clearTimeout(fetchTimer);
+        fetchTimer = null;
+      }
       console.warn('[Feed] Fetch failed, retaining last saved data:', err.message);
+      // NEVER replace existing data with an error
+      if (!State.data) {
+        State.isOffline = true;
+      }
       renderApp();
     } finally {
       isFetching = false;
@@ -841,6 +911,109 @@
     `;
   }
 
+  // --- UNIFIED CHIP COMPONENT (Barlow SemiBold 13px, 28/32 heights, 48px hit areas) ---
+  function renderChip({
+    variant = 'status',
+    label = '',
+    status = 'upcoming',
+    icon = null,
+    compact = false,
+    selected = false,
+    count = null,
+    school = null,
+    tappable = false,
+    extraClass = '',
+    onClick = '',
+    style = '',
+    attrs = ''
+  } = {}) {
+    let classes = ['fiesta-chip', extraClass];
+    if (compact) classes.push('compact');
+    if (tappable) classes.push('tappable');
+
+    let content = '';
+
+    switch (variant) {
+      case 'status': {
+        const s = (status || label || '').toLowerCase();
+        if (s === 'live') {
+          classes.push('status-live');
+          content = `<span class="live-dot-pulse"></span><span>${escapeHtml(label || 'LIVE').toUpperCase()}</span>`;
+        } else if (s === 'completed' || s === 'done') {
+          classes.push('status-done');
+          content = `<span>${escapeHtml(label || 'DONE').toUpperCase()}</span>`;
+        } else {
+          classes.push('status-upcoming');
+          content = `<span>${escapeHtml(label || 'UPCOMING').toUpperCase()}</span>`;
+        }
+        break;
+      }
+      case 'winner': {
+        classes.push('chip-winner');
+        const ic = icon ? renderIcon(icon, 'lucide-ic') : renderIcon('trophy', 'lucide-ic');
+        content = `${ic}<span>${escapeHtml(label)}</span>`;
+        break;
+      }
+      case 'win': {
+        classes.push('chip-win-badge');
+        content = `<span>WIN</span>`;
+        break;
+      }
+      case 'loss': {
+        classes.push('chip-loss-badge');
+        content = `<span>LOSS</span>`;
+        break;
+      }
+      case 'filter': {
+        classes.push('chip-filter');
+        if (selected) classes.push('selected');
+        const ic = icon ? renderIcon(icon, 'lucide-ic') : '';
+        content = `${ic}<span>${escapeHtml(label)}</span>`;
+        break;
+      }
+      case 'category': {
+        classes.push('chip-category');
+        const ic = icon ? renderIcon(icon, 'lucide-ic') : '';
+        content = `${ic}<span>${escapeHtml(label)}</span>`;
+        break;
+      }
+      case 'school': {
+        classes.push('chip-school');
+        const sch = school || {};
+        const isKasimabad = (sch.code === 'KSM') || (sch.short_name || '').toLowerCase().includes('kasimabad');
+        if (isKasimabad) classes.push('school-kasimabad');
+        const color = sch.color || sch.accent_color || '#2448FF';
+        content = `<span class="fiesta-chip-bar" style="background: ${color};"></span><span>${escapeHtml(sch.short_name || label)}</span>`;
+        break;
+      }
+      case 'count': {
+        classes.push('chip-count');
+        content = `<span>${escapeHtml(label)}</span><span class="count-bubble">${count != null ? count : ''}</span>`;
+        break;
+      }
+      default: {
+        const ic = icon ? renderIcon(icon, 'lucide-ic') : '';
+        content = `${ic}<span>${escapeHtml(label)}</span>`;
+      }
+    }
+
+    const clickAttr = onClick ? `onclick="${onClick}" role="button" tabindex="0"` : '';
+    const styleAttr = style ? `style="${style}"` : '';
+
+    return `<span class="${classes.filter(Boolean).join(' ')}" ${clickAttr} ${styleAttr} ${attrs}>${content}</span>`;
+  }
+
+  // --- CALM WARMING BANNER COMPONENT ---
+  function renderWarmingBanner() {
+    if (!State.isWarmingUp) return '';
+    return `
+      <div class="warming-banner row" style="align-items: center; justify-content: center; gap: 10px; padding: 10px 16px; background: rgba(36, 72, 255, 0.12); border-bottom: 1px solid var(--ln); color: var(--tx); font-size: 13px; font-weight: 700;">
+        <span class="inline-spinner" style="width: 14px; height: 14px; border: 2px solid var(--pri); border-top-color: transparent; border-radius: 50%; display: inline-block; animation: spin 0.8s linear infinite;"></span>
+        <span>Connecting to the live server, this can take up to a minute...</span>
+      </div>
+    `;
+  }
+
   // --- ROUTING SYSTEM ---
   function parseHashRoute() {
     const raw = location.hash.slice(1) || 'home';
@@ -856,12 +1029,33 @@
   }
 
   function navigate(route, params = {}) {
-    State.currentRoute = route;
-    State.routeParams = params;
-    // Single URL mode: Keep browser URL clean at / without hash slugging
-    if (window.history && window.history.replaceState) {
-      window.history.replaceState({ route, params }, '', window.location.pathname || '/');
+    if (typeof route === 'string') {
+      if (route.startsWith('#')) route = route.slice(1);
+      if (route.startsWith('./#')) route = route.slice(3);
+      if (route.startsWith('/#')) route = route.slice(2);
+      if (route.includes('?')) {
+        const [pathPart, queryPart] = route.split('?');
+        route = pathPart;
+        const parsed = { ...params };
+        queryPart.split('&').forEach(pair => {
+          const [k, v] = pair.split('=');
+          if (k) parsed[decodeURIComponent(k)] = decodeURIComponent(v || '');
+        });
+        params = parsed;
+      }
     }
+
+    State.currentRoute = route || 'home';
+    State.routeParams = params || {};
+
+    // Single URL mode: Keep browser address bar strictly clean at / without hash slugging
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState({ route: State.currentRoute, params: State.routeParams }, '', window.location.pathname || '/');
+    }
+    if (window.location.hash && window.history && window.history.replaceState) {
+      window.history.replaceState({ route: State.currentRoute, params: State.routeParams }, '', window.location.pathname || '/');
+    }
+
     transitionView(() => renderApp());
   }
 
@@ -917,7 +1111,7 @@
       <header class="bar" aria-label="Top Bar">
         <div style="display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1;">
           ${opts.backHref ? `
-            <a href="${opts.backHref}" class="notif-bell-btn" aria-label="Go back" style="display: grid; place-items: center; text-decoration: none; flex-shrink: 0;">
+            <a href="javascript:void(0)" onclick="window.App.navigate('${opts.backHref.replace(/^#/, '')}')" class="notif-bell-btn" aria-label="Go back" style="display: grid; place-items: center; text-decoration: none; flex-shrink: 0;">
               ${renderIcon('arrow-left')}
             </a>
           ` : opts.showBackAction ? `
@@ -925,7 +1119,7 @@
               ${renderIcon('arrow-left')}
             </button>
           ` : `
-            <a href="#home" class="topbar-logo-btn" aria-label="Home" onclick="this.classList.remove('topbar-logo-pop'); void this.offsetWidth; this.classList.add('topbar-logo-pop');">
+            <a href="javascript:void(0)" class="topbar-logo-btn" aria-label="Home" onclick="window.App.navigate('home'); this.classList.remove('topbar-logo-pop'); void this.offsetWidth; this.classList.add('topbar-logo-pop');">
               <img 
                 src="${logoSrc}" 
                 alt="Fiesta Logo" 
@@ -949,7 +1143,7 @@
 
         <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
           <!-- Search Shortcut (48px Touch Target) -->
-          <a href="#search" class="theme-toggle-btn" aria-label="Search Fiesta" title="Search" style="display: grid; place-items: center; text-decoration: none;">
+          <a href="javascript:void(0)" onclick="window.App.navigate('search')" class="theme-toggle-btn" aria-label="Search Fiesta" title="Search" style="display: grid; place-items: center; text-decoration: none;">
             ${renderIcon('search')}
           </a>
 
@@ -998,17 +1192,17 @@
     return `
       <nav class="bnav" aria-label="Bottom Navigation">
         <!-- 1. Home -->
-        <a href="#home" class="bnav-btn ${isHome ? 'on' : ''}" aria-label="Home" onclick="if(location.hash==='#home'||location.hash===''){window.scrollTo({top:0,behavior:'smooth'});}">
+        <a href="javascript:void(0)" class="bnav-btn ${isHome ? 'on' : ''}" aria-label="Home" onclick="window.App.navigate('home'); window.scrollTo({top:0,behavior:'smooth'});">
           ${renderIcon('home')}
           <span>Home</span>
         </a>
         <!-- 2. Scores -->
-        <a href="#scores?mode=points" class="bnav-btn ${isScores ? 'on' : ''}" aria-label="Scores and Standings" onclick="if(location.hash.startsWith('#scores')){window.scrollTo({top:0,behavior:'smooth'});}">
+        <a href="javascript:void(0)" class="bnav-btn ${isScores ? 'on' : ''}" aria-label="Scores and Standings" onclick="window.App.navigate('scores', {mode:'points'}); window.scrollTo({top:0,behavior:'smooth'});">
           ${renderIcon('trophy')}
           <span>Scores</span>
         </a>
         <!-- 3. Live (Raised Centre Button) -->
-        <a href="#live?tab=now" class="bnav-btn bnav-btn-live ${isLive ? 'on' : ''}" aria-label="Live Stream and Arena" onclick="if(location.hash.startsWith('#live')){window.scrollTo({top:0,behavior:'smooth'});}">
+        <a href="javascript:void(0)" class="bnav-btn bnav-btn-live ${isLive ? 'on' : ''}" aria-label="Live Stream and Arena" onclick="window.App.navigate('live', {tab:'now'}); window.scrollTo({top:0,behavior:'smooth'});">
           <div class="bnav-btn-live-raised" style="position: relative;">
             ${renderIcon('play')}
             ${isLiveActive ? '<span class="pdot"></span><span class="live-ring-pulse" aria-hidden="true"></span>' : ''}
@@ -1016,12 +1210,12 @@
           <span>Live</span>
         </a>
         <!-- 4. Fixtures -->
-        <a href="#fixtures?day=13" class="bnav-btn ${isFixtures ? 'on' : ''}" aria-label="Schedule and Fixtures" onclick="if(location.hash.startsWith('#fixtures')){window.scrollTo({top:0,behavior:'smooth'});}">
+        <a href="javascript:void(0)" class="bnav-btn ${isFixtures ? 'on' : ''}" aria-label="Schedule and Fixtures" onclick="window.App.navigate('fixtures', {day:'13'}); window.scrollTo({top:0,behavior:'smooth'});">
           ${renderIcon('calendar')}
           <span>Fixtures</span>
         </a>
         <!-- 5. Photos -->
-        <a href="#photos" class="bnav-btn ${isPhotos ? 'on' : ''}" aria-label="Event Photos" onclick="if(location.hash.startsWith('#photos')){window.scrollTo({top:0,behavior:'smooth'});}">
+        <a href="javascript:void(0)" class="bnav-btn ${isPhotos ? 'on' : ''}" aria-label="Event Photos" onclick="window.App.navigate('photos'); window.scrollTo({top:0,behavior:'smooth'});">
           ${renderIcon('image')}
           <span>Photos</span>
         </a>
@@ -1059,7 +1253,7 @@
       <section class="col" style="gap: 12px; width: 100%;">
         <div class="row sb" style="align-items: baseline;">
           <span class="ttab">School Leaderboard</span>
-          <a href="#scores?mode=points" class="link-accent lab">View all &rarr;</a>
+          <a href="javascript:void(0)" onclick="window.App.navigate('scores', {mode:'points'})" class="link-accent lab">View all &rarr;</a>
         </div>
     `;
 
@@ -1067,7 +1261,7 @@
       html += `
         <div class="home-podium">
           <!-- Rank 2: Silver -->
-          <a href="#school?id=${s2.id}" class="home-podium-col rank-2" data-school-id="${s2.id}" aria-label="Rank 2: ${escapeHtml(s2.short_name)}" style="text-decoration: none; color: inherit;">
+          <a href="javascript:void(0)" onclick="window.App.navigate('school', {id:'${s2.id}'})" class="home-podium-col rank-2" data-school-id="${s2.id}" aria-label="Rank 2: ${escapeHtml(s2.short_name)}" style="text-decoration: none; color: inherit;">
             ${renderSchoolCrest(s2, 'c56')}
             <div style="font-weight: 700; font-size: 13px; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">
               ${s2.short_name}
@@ -1080,7 +1274,7 @@
           </a>
 
           <!-- Rank 1: Gold Center -->
-          <a href="#school?id=${s1.id}" class="home-podium-col rank-1" data-school-id="${s1.id}" aria-label="Rank 1: ${escapeHtml(s1.short_name)}" style="text-decoration: none; color: inherit;">
+          <a href="javascript:void(0)" onclick="window.App.navigate('school', {id:'${s1.id}'})" class="home-podium-col rank-1" data-school-id="${s1.id}" aria-label="Rank 1: ${escapeHtml(s1.short_name)}" style="text-decoration: none; color: inherit;">
             <div class="gold-shine" style="border-radius: 50%; padding: 4px; display: inline-flex;">
               ${renderSchoolCrest(s1, 'c72')}
             </div>
@@ -1095,7 +1289,7 @@
           </a>
 
           <!-- Rank 3: Bronze -->
-          <a href="#school?id=${s3.id}" class="home-podium-col rank-3" data-school-id="${s3.id}" aria-label="Rank 3: ${escapeHtml(s3.short_name)}" style="text-decoration: none; color: inherit;">
+          <a href="javascript:void(0)" onclick="window.App.navigate('school', {id:'${s3.id}'})" class="home-podium-col rank-3" data-school-id="${s3.id}" aria-label="Rank 3: ${escapeHtml(s3.short_name)}" style="text-decoration: none; color: inherit;">
             ${renderSchoolCrest(s3, 'c56')}
             <div style="font-weight: 700; font-size: 13px; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">
               ${s3.short_name}
@@ -1114,7 +1308,7 @@
       html += `
         <div class="col" style="gap: 8px; width: 100%;">
           ${remainder.map((s, idx) => `
-            <a href="#school?id=${s.id}" class="srow" data-school-id="${s.id}" style="--acc: ${s.accent_color};" aria-label="Rank ${idx + 4}: ${escapeHtml(s.short_name)}">
+            <a href="javascript:void(0)" onclick="window.App.navigate('school', {id:'${s.id}'})" class="srow" data-school-id="${s.id}" style="--acc: ${s.accent_color};" aria-label="Rank ${idx + 4}: ${escapeHtml(s.short_name)}">
               <span class="rk r${idx + 4}">${idx + 4}</span>
               ${renderSchoolCrest(s, 'c40')}
               <div class="fl" style="min-width: 0;">
@@ -1167,19 +1361,31 @@
   }
 
   function renderHomeScreen() {
-    const feed = State.data || {};
+    const feed = State.data || SCAFFOLD_FEED;
     const schools = feed.schools || [];
     const results = feed.results || [];
     const events = feed.events || [];
     const fixtures = feed.fixtures || [];
     const announcements = feed.announcements || [];
 
-    const completedResults = results.filter(r => r.places && r.places.some(p => p.rank === 1));
+    const completedResults = results.filter(r => {
+      if (!r) return false;
+      const isApproved = r.status === 'Approved' || r.status === 'Completed';
+      const hasWinner = (r.first_place_school_id) || (r.places && r.places.some(p => p.rank === 1));
+      return isApproved && hasWinner;
+    });
     const topResult = completedResults[0];
     const ev = topResult ? events.find(e => e.id === topResult.event_id) : null;
-    const p1 = topResult ? topResult.places.find(p => p.rank === 1) : null;
-    const winSchool = p1 ? schools.find(s => s.id === p1.school_id) : null;
-    const hasApprovedWinner = Boolean(topResult && winSchool && p1);
+    let winSchool = null;
+    let p1Points = 20;
+    let p1Athlete = '';
+    if (topResult) {
+      const winnerId = topResult.first_place_school_id || (topResult.places && topResult.places.find(p => p.rank === 1)?.school_id);
+      winSchool = winnerId ? schools.find(s => s.id === winnerId) : null;
+      p1Points = topResult.first_place_points || 20;
+      p1Athlete = topResult.first_place_athlete || '';
+    }
+    const hasApprovedWinner = Boolean(topResult && winSchool);
 
     const activeAnnouncements = announcements.filter(a => {
       if (!a || !a.message) return false;
@@ -1193,6 +1399,7 @@
     return `
       <div class="app" style="padding-bottom: 84px;">
         ${renderAppBar(EVENT_CONFIG.title)}
+        ${renderWarmingBanner()}
         ${renderOfflineBanner()}
 
         ${activeAnnouncements.length > 0 ? `
@@ -1239,8 +1446,8 @@
               <div class="lab" style="color: var(--glacier); font-weight: 600;">Sports Fiesta 2026</div>
 
               <div class="row" style="gap: 10px; margin-top: 6px;">
-                <a href="#scores?mode=points" class="btn on-hero" style="min-height: 40px; padding: 0 16px; font-size: 14px;">School Standings</a>
-                <a href="#fixtures?day=13" class="btn on-hero" style="min-height: 40px; padding: 0 16px; font-size: 14px; background: rgba(255,255,255,0.15);">Event Schedule</a>
+                <a href="javascript:void(0)" onclick="window.App.navigate('scores', {mode:'points'})" class="btn on-hero" style="min-height: 40px; padding: 0 16px; font-size: 14px;">School Standings</a>
+                <a href="javascript:void(0)" onclick="window.App.navigate('fixtures', {day:'13'})" class="btn on-hero" style="min-height: 40px; padding: 0 16px; font-size: 14px; background: rgba(255,255,255,0.15);">Event Schedule</a>
               </div>
             </div>
           `}
@@ -1253,7 +1460,7 @@
             <section class="col" style="gap: 8px; width: 100%;">
               <div class="row sb" style="align-items: baseline;">
                 <span class="ttab">Now and Next</span>
-                <a href="#fixtures" class="link-accent lab">All fixtures &rarr;</a>
+                <a href="javascript:void(0)" onclick="window.App.navigate('fixtures')" class="link-accent lab">All fixtures &rarr;</a>
               </div>
               ${fixtures.length === 0 ? `
                 <div class="card" style="text-align: center; padding: 24px 16px;">
@@ -1264,7 +1471,7 @@
                 const sA = schools.find(s => s.id === f.school_a_id);
                 const sB = schools.find(s => s.id === f.school_b_id);
                 return `
-                  <a href="#match?id=${f.id}" class="card col" style="gap: 8px; text-decoration: none; color: inherit;">
+                  <a href="javascript:void(0)" onclick="window.App.navigate('match', {id:'${f.id}'})" class="card col" style="gap: 8px; text-decoration: none; color: inherit;">
                     <div class="row sb">
                       <span class="lab mut">${escapeHtml(comp?.name || 'Match')} · ${escapeHtml(f.round || '')}</span>
                       <span class="${f.status === 'Completed' ? 'st done' : f.status === 'Live' ? 'badge-live-pulse' : 'st'}">
@@ -1297,27 +1504,27 @@
             <section class="col" style="gap: 8px; width: 100%;">
               <span class="ttab">Quick Links</span>
               <div class="g3">
-                <a href="#scores" class="tile">
+                <a href="javascript:void(0)" onclick="window.App.navigate('scores')" class="tile">
                   <span class="ico">${renderIcon('trophy')}</span>
                   <span>Scores</span>
                 </a>
-                <a href="#fixtures" class="tile">
+                <a href="javascript:void(0)" onclick="window.App.navigate('fixtures')" class="tile">
                   <span class="ico">${renderIcon('calendar')}</span>
                   <span>Fixtures</span>
                 </a>
-                <a href="#games" class="tile">
+                <a href="javascript:void(0)" onclick="window.App.navigate('games')" class="tile">
                   <span class="ico">${renderIcon('medal')}</span>
                   <span>Games</span>
                 </a>
-                <a href="#photos" class="tile">
+                <a href="javascript:void(0)" onclick="window.App.navigate('photos')" class="tile">
                   <span class="ico">${renderIcon('image')}</span>
                   <span>Photos</span>
                 </a>
-                <a href="#search" class="tile">
+                <a href="javascript:void(0)" onclick="window.App.navigate('search')" class="tile">
                   <span class="ico">${renderIcon('search')}</span>
                   <span>Search</span>
                 </a>
-                <a href="#info" class="tile">
+                <a href="javascript:void(0)" onclick="window.App.navigate('info')" class="tile">
                   <span class="ico">${renderIcon('info')}</span>
                   <span>Event Info</span>
                 </a>
@@ -3543,7 +3750,7 @@
           <div class="dsp h-sec" style="margin: 0; font-size: 20px;">Resource Not Found</div>
           <div class="lab mut" style="font-size: 14px; max-width: 300px; line-height: 1.5;">${escapeHtml(message)}</div>
           <div class="row" style="gap: 12px; margin-top: 8px;">
-            <a href="#home" class="btn" style="min-height: 48px; padding: 0 20px; display: inline-flex; align-items: center;">Return to Home</a>
+            <button type="button" class="btn" onclick="window.App.navigate('home')" style="min-height: 48px; padding: 0 20px; display: inline-flex; align-items: center; cursor: pointer;">Return to Home</button>
             <button type="button" class="btn ghost" onclick="history.back()" style="min-height: 48px; padding: 0 20px;">Go Back</button>
           </div>
         </div>

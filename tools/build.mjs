@@ -288,7 +288,7 @@ const notFoundHtml = `<!DOCTYPE html>
     <img src="./assets/logo.png" alt="Fiesta Logo" style="width: 80px; height: 80px; object-fit: contain;">
     <h1 style="font-size: 32px; font-weight: 800; margin: 0; font-family: 'Barlow Condensed', sans-serif;">PAGE NOT FOUND</h1>
     <p style="color: var(--mut); margin: 0; font-size: 15px;">The page you are looking for does not exist or has moved.</p>
-    <a href="./#home" class="btn-pri" style="margin-top: 12px; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; padding: 12px 24px; border-radius: 999px; background: var(--pri); color: #fff; font-weight: 700;">
+    <a href="./" class="btn-pri" style="margin-top: 12px; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; padding: 12px 24px; border-radius: 999px; background: var(--pri); color: #fff; font-weight: 700;">
       Return to Home
     </a>
   </div>

@@ -5,6 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>LFGOS Sports Fiesta 2026</title>
   
+  <!-- Immediate Single URL Enforcement: Strip any hash slug from address bar before render -->
+  <script>
+    if (window.location.hash) {
+      try {
+        window._initialHash = window.location.hash;
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState(null, '', window.location.pathname || '/');
+        }
+      } catch(e) {}
+    }
+  </script>
+
   <!-- Immediate Theme Script to Prevent Theme Flash -->
   <script>
     (function() {

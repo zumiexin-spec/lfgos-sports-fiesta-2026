@@ -544,6 +544,158 @@ button svg, .btn svg, .chip svg, a svg {
 }
 .btn.on-hero:active { background: #EAF2FF; }
 
+/* ==========================================================================
+   UNIFIED CHIP SYSTEM (28px compact / 32px default, Barlow SemiBold 13px, 48px hit areas)
+   ========================================================================== */
+.fiesta-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-family: 'Barlow', -apple-system, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
+  position: relative;
+  border: 1px solid var(--ln);
+  background: var(--sf);
+  color: var(--tx);
+  vertical-align: middle;
+}
+
+.fiesta-chip.compact,
+.fiesta-chip-compact,
+.fiesta-chip.fiesta-chip-compact {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.fiesta-chip.tappable {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.fiesta-chip.tappable::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 48px;
+  min-height: 48px;
+  width: 100%;
+  height: 100%;
+}
+
+/* Status variants */
+.fiesta-chip.status-upcoming {
+  background: var(--alt);
+  color: var(--mut);
+  border-color: var(--ln);
+  text-transform: uppercase;
+}
+.fiesta-chip.status-live {
+  background: rgba(255, 85, 0, 0.15);
+  color: var(--orange);
+  border-color: var(--orange);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.dark .fiesta-chip.status-live {
+  background: rgba(255, 85, 0, 0.22);
+  color: #FF7733;
+  border-color: #FF5500;
+}
+.fiesta-chip.status-done {
+  background: var(--alt);
+  color: var(--mut);
+  border-color: var(--ln);
+  text-transform: uppercase;
+}
+
+/* Winner variant (Gold only for winners) */
+.fiesta-chip.chip-winner {
+  background: rgba(255, 195, 66, 0.2);
+  color: #8C5900;
+  border-color: var(--gold);
+  font-weight: 700;
+}
+.dark .fiesta-chip.chip-winner {
+  background: rgba(255, 195, 66, 0.18);
+  color: var(--gold);
+  border-color: var(--gold);
+}
+
+/* WIN & LOSS variants */
+.fiesta-chip.chip-win-badge {
+  background: rgba(255, 195, 66, 0.22);
+  color: #8C5900;
+  border-color: var(--gdeep);
+  font-weight: 800;
+  font-style: italic;
+  font-family: 'Barlow Condensed', sans-serif;
+}
+.dark .fiesta-chip.chip-win-badge {
+  color: var(--gold);
+  border-color: var(--gold);
+}
+.fiesta-chip.chip-loss-badge {
+  background: rgba(142, 153, 168, 0.18);
+  color: var(--mut);
+  border-color: var(--silver);
+  font-weight: 800;
+  font-style: italic;
+  font-family: 'Barlow Condensed', sans-serif;
+}
+.dark .fiesta-chip.chip-loss-badge {
+  color: var(--silver);
+  border-color: var(--silver);
+}
+
+/* Filter chip variant */
+.fiesta-chip.chip-filter {
+  background: var(--alt);
+  color: var(--tx);
+  border-color: var(--ln);
+}
+.fiesta-chip.chip-filter.selected {
+  background: var(--royal);
+  color: #FFFFFF;
+  border-color: var(--royal);
+}
+.dark .fiesta-chip.chip-filter.selected {
+  background: var(--glacier);
+  color: var(--ink);
+  border-color: var(--glacier);
+}
+
+/* School chip variant */
+.fiesta-chip.chip-school {
+  background: var(--sf);
+  border-color: var(--ln);
+}
+.fiesta-chip.chip-school.school-kasimabad {
+  background: #FFFFFF;
+  border-color: var(--sky);
+  color: var(--ink);
+}
+.fiesta-chip-bar {
+  display: inline-block;
+  width: 6px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
 .chip {
   min-height: 48px;
   padding: 0 16px;
