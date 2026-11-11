@@ -158,6 +158,8 @@ async function runSuite() {
           pageErrors.push(err.message);
         });
 
+        await page.route('**/disable-devtool.min.js', route => route.fulfill({ status: 200, contentType: 'application/javascript', body: '' }));
+
         await page.addInitScript((t) => {
           localStorage.setItem('fiesta_theme', t);
         }, theme);
@@ -291,7 +293,12 @@ async function runSuite() {
       deviceScaleFactor: 2
     });
     const notifPage = await notifContext.newPage();
+    await notifPage.route('**/disable-devtool.min.js', route => route.fulfill({ status: 200, contentType: 'application/javascript', body: '' }));
+    await notifPage.addInitScript(() => {
+      sessionStorage.setItem('fiesta_splash_done', '1');
+    });
     await notifPage.goto(`${BASE_URL}/`, { waitUntil: 'networkidle' });
+    await notifPage.waitForTimeout(500);
 
     const bellBtn = notifPage.locator('.notif-bell-btn');
     await bellBtn.click();

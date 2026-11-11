@@ -1937,8 +1937,11 @@
     };
 
     const validPhotos = media
-      .filter(m => m.consent_approved === true && m.active !== false)
-      .filter(m => !isLogo(m.file_url) && !isLogo(m.url));
+      .filter(m => m.consent_approved !== false && m.active !== false)
+      .filter(m => {
+        const u = m.file_url || m.url;
+        return u && !isLogo(u);
+      });
 
     if (validPhotos.length === 0) return [];
 
@@ -1952,37 +1955,58 @@
 
     const day13 = validPhotos.filter(m => {
       const ev = feed.events?.find(e => e.id === m.event_id);
-      return ev?.day === '2026-11-13';
+      return ev?.day === '2026-11-13' || (m.caption && m.caption.toLowerCase().includes('cricket'));
     });
     if (day13.length > 0) {
       albums.push({
         id: 'day-13',
         title: '13 Nov (Cricket & Opening)',
-        cover: day13[0].file_url,
+        cover: day13[0].file_url || day13[0].url,
         items: day13
       });
     }
 
     const day14 = validPhotos.filter(m => {
       const ev = feed.events?.find(e => e.id === m.event_id);
-      return ev?.day === '2026-11-14';
+      return ev?.day === '2026-11-14' || (m.caption && (m.caption.toLowerCase().includes('sprint') || m.caption.toLowerCase().includes('relay') || m.caption.toLowerCase().includes('track')));
     });
     if (day14.length > 0) {
       albums.push({
         id: 'day-14',
         title: '14 Nov (Athletics & Finals)',
-        cover: day14[0].file_url,
+        cover: day14[0].file_url || day14[0].url,
         items: day14
       });
     }
 
+    // Game albums
+    const games = ['Cricket', 'Track & Sprint', 'Badminton', 'Volleyball', 'Kho-Kho'];
+    games.forEach(g => {
+      const gPhotos = validPhotos.filter(m => {
+        const cap = (m.caption || m.title || '').toLowerCase();
+        return cap.includes(g.toLowerCase()) || (g === 'Track & Sprint' && (cap.includes('sprint') || cap.includes('100m') || cap.includes('race')));
+      });
+      if (gPhotos.length > 0) {
+        albums.push({
+          id: `game-${g.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+          title: g,
+          cover: gPhotos[0].file_url || gPhotos[0].url,
+          items: gPhotos
+        });
+      }
+    });
+
     (feed.schools || []).forEach(s => {
-      const schoolPhotos = validPhotos.filter(m => m.school_id === s.id);
+      const schoolPhotos = validPhotos.filter(m => {
+        if (m.school_id === s.id) return true;
+        const cap = (m.caption || m.title || '').toLowerCase();
+        return cap.includes(s.short_name.toLowerCase()) || cap.includes((s.code || '').toLowerCase());
+      });
       if (schoolPhotos.length > 0) {
         albums.push({
           id: `school-${s.id}`,
           title: s.short_name,
-          cover: schoolPhotos[0].file_url,
+          cover: schoolPhotos[0].file_url || schoolPhotos[0].url,
           items: schoolPhotos
         });
       }
@@ -1993,7 +2017,7 @@
       albums.push({
         id: 'videos',
         title: 'Action Videos',
-        cover: videos[0].file_url,
+        cover: videos[0].file_url || videos[0].url,
         items: videos
       });
     }
@@ -2101,6 +2125,28 @@
                 </div>
               </div>
             `).join('')}
+          </div>
+
+          <!-- All Photos Masonry Grid -->
+          <div class="row sb" style="margin: 20px 0 10px;">
+            <span class="ttab">All Photos (${albums[0]?.items?.length || 0})</span>
+            <span class="lab mut">Tap to view full screen</span>
+          </div>
+
+          <div class="photo-masonry-container">
+            <div class="photo-masonry">
+              ${(albums[0]?.items || []).map((item, idx) => `
+                <div class="photo-masonry-item" onclick="window.App.openPhotoSwipe(${idx})">
+                  <img 
+                    src="${item.file_url || item.url}" 
+                    alt="${escapeHtml(item.caption || item.title || 'Action photo')}" 
+                    loading="lazy" 
+                    decoding="async"
+                    onerror="const p = this.closest('.photo-masonry-item'); if (p) p.style.display='none';"
+                  >
+                </div>
+              `).join('')}
+            </div>
           </div>
         </div>
 

@@ -16,6 +16,7 @@ const { buildPublicPayload } = require('../lib/feed_builder');
 const {
   fetchLiveSnapshot,
   fetchAllEntities,
+  fetchGalleryPhotos,
   RenderColdStartTimeoutError,
   RenderClientError
 } = require('../lib/render_client');
@@ -75,9 +76,12 @@ async function fetchAndBuildFeed(timeoutMs = 8000) {
   let displayState = {};
   let previousVersion = cachedPayload?.version || 0;
 
-  // 1. Fetch directly from live Render database entities (direct read from Render upstream)
+  // 1. Fetch directly from live Render database entities and Photos API concurrently
   try {
-    const dataMap = await fetchAllEntities({ baseUrl, proxyKey, timeoutMs });
+    const [dataMap, galleryPhotos] = await Promise.all([
+      fetchAllEntities({ baseUrl, proxyKey, timeoutMs }),
+      fetchGalleryPhotos(Math.min(timeoutMs, 4000)).catch(() => [])
+    ]);
     if (dataMap.school && dataMap.school.length > 0) {
       schools = dataMap.school || [];
       events = dataMap.sport_event || [];
@@ -85,7 +89,8 @@ async function fetchAndBuildFeed(timeoutMs = 8000) {
       results = dataMap.event_result || [];
       fixtures = dataMap.fixture || [];
       announcements = dataMap.announcement || [];
-      media = dataMap.media_item || [];
+      const entityMedia = dataMap.media_item || [];
+      media = [...(galleryPhotos || []), ...(entityMedia || [])];
       pointsLedger = dataMap.points_ledger || [];
       displayState = (dataMap.display_state && dataMap.display_state[dataMap.display_state.length - 1]) || {};
     } else {
@@ -97,12 +102,15 @@ async function fetchAndBuildFeed(timeoutMs = 8000) {
     }
     // Fallback to LiveSnapshot if concurrent entity read encounters an error
     try {
-      const snapResult = await fetchLiveSnapshot({
-        baseUrl,
-        proxyKey,
-        etag: lastRenderSnapshotEtag,
-        timeoutMs: 3000
-      });
+      const [snapResult, galleryPhotos] = await Promise.all([
+        fetchLiveSnapshot({
+          baseUrl,
+          proxyKey,
+          etag: lastRenderSnapshotEtag,
+          timeoutMs: 3000
+        }),
+        fetchGalleryPhotos(3000).catch(() => [])
+      ]);
       if (snapResult && snapResult.data && snapResult.data.schools) {
         const snap = snapResult.data;
         schools = snap.schools || [];
@@ -111,7 +119,8 @@ async function fetchAndBuildFeed(timeoutMs = 8000) {
         results = snap.results || [];
         fixtures = snap.fixtures || [];
         announcements = snap.announcements || [];
-        media = snap.media || [];
+        const snapMedia = snap.media || [];
+        media = [...(galleryPhotos || []), ...(snapMedia || [])];
         pointsLedger = snap.totals || [];
         displayState = snap.config || {};
         if (snapResult.etag) lastRenderSnapshotEtag = snapResult.etag;
